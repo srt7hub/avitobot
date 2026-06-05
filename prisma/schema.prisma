@@ -1,8 +1,195 @@
-// Базовая схема — детали в TASK-002
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── Tenant ───────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id          String       @id @default(cuid())
+  name        String
+  slug        String       @unique
+  status      TenantStatus @default(TRIAL)
+  botName     String       @default("Менеджер")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  users       TenantUser[]
+  properties  Property[]
+  faqEntries  FaqEntry[]
+  avitoConfig TenantAvitoConfig?
+  dialogues   Dialogue[]
+  unhandled   UnhandledQuestion[]
+  botSessions BotSession[]
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+// ─── TenantUser ───────────────────────────────────────────────────────────────
+
+model TenantUser {
+  id              String        @id @default(cuid())
+  tenantId        String
+  email           String
+  password        String
+  role            TenantUserRole @default(CLIENT)
+  name            String
+  telegramContact String        @default("")
+  createdAt       DateTime      @default(now())
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+enum TenantUserRole {
+  CLIENT
+  OPS
+}
+
+// ─── TenantAvitoConfig ────────────────────────────────────────────────────────
+
+model TenantAvitoConfig {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+  avitoClientId     String    @default("")
+  avitoClientSecret String    @default("")
+  avitoUserId       String    @default("")
+  accessToken       String    @default("")
+  refreshToken      String    @default("")
+  tokenExpiresAt    DateTime?
+  lastPolledAt      DateTime?
+  pollingEnabled    Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ─── Property ─────────────────────────────────────────────────────────────────
+
+model Property {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  address     String   @default("")
+  description String   @default("")
+  avitoItemId String   @default("")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  faqEntries  FaqEntry[]
+  dialogues   Dialogue[]
+
+  @@index([tenantId])
+  @@index([tenantId, avitoItemId])
+}
+
+// ─── FaqEntry ─────────────────────────────────────────────────────────────────
+
+model FaqEntry {
+  id         String   @id @default(cuid())
+  tenantId   String
+  propertyId String?
+  question   String
+  answer     String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, propertyId])
+}
+
+// ─── UnhandledQuestion ────────────────────────────────────────────────────────
+
+model UnhandledQuestion {
+  id         String    @id @default(cuid())
+  tenantId   String
+  question   String
+  chatId     String    @default("")
+  isResolved Boolean   @default(false)
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isResolved])
+}
+
+// ─── Dialogue ─────────────────────────────────────────────────────────────────
+
+model Dialogue {
+  id            String    @id @default(cuid())
+  tenantId      String
+  propertyId    String?
+  avitoChatId   String
+  guestName     String    @default("")
+  messageCount  Int       @default(0)
+  lastMessageAt DateTime?
+  pausedUntil   DateTime?
+  greetingSent  Boolean   @default(false)
+  summary       String    @default("")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property      Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  messages      Message[]
+
+  @@unique([tenantId, avitoChatId])
+  @@index([tenantId])
+}
+
+// ─── Message ──────────────────────────────────────────────────────────────────
+
+model Message {
+  id          String      @id @default(cuid())
+  dialogueId  String
+  avitoMsgId  String      @unique
+  role        MessageRole
+  content     String
+  processedAt DateTime    @default(now())
+
+  dialogue    Dialogue    @relation(fields: [dialogueId], references: [id], onDelete: Cascade)
+
+  @@index([dialogueId])
+  @@index([avitoMsgId])
+}
+
+enum MessageRole {
+  GUEST
+  BOT
+}
+
+// ─── BotSession ───────────────────────────────────────────────────────────────
+
+model BotSession {
+  id             String    @id @default(cuid())
+  tenantId       String    @unique
+  isRunning      Boolean   @default(false)
+  lastPollAt     DateTime?
+  errorCount     Int       @default(0)
+  lastError      String    @default("")
+  messagesDay    Int       @default(0)
+  messagesWeek   Int       @default(0)
+  messagesMonth  Int       @default(0)
+  autoReplyRate  Float     @default(0)
+  updatedAt      DateTime  @updatedAt
+
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
