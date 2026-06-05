@@ -1,9 +1,9 @@
 node_modules/
 dist/
 .env
-*.log
 .avito_token_*.json
 .replied_msgs_*.json
 .telegram_offset_*.json
 prisma/dev.db
 prisma/production.db
+*.log

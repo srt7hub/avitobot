@@ -1,0 +1,8 @@
+// Базовая схема — детали в TASK-002
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

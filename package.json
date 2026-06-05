@@ -1,0 +1,56 @@
+{
+  "name": "avitobot-saas",
+  "version": "1.0.0",
+  "description": "**Статус:** MVP в разработке   **Дата старта:** 2026-06-05   **Папка:** `/avitobot-saas/` — отдельный проект, независимый от SmartApart",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "tsc --noEmit",
+    "server": "tsx watch server/index.ts",
+    "bot": "tsx watch server/bot.ts",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/srt7hub/avitobot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/srt7hub/avitobot/issues"
+  },
+  "homepage": "https://github.com/srt7hub/avitobot#readme",
+  "dependencies": {
+    "@prisma/client": "^7.8.0",
+    "@types/node": "^25.9.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "jsonwebtoken": "^9.0.3",
+    "nanoid": "^5.1.11",
+    "node-cron": "^4.2.1",
+    "tsx": "^4.22.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "prisma": "^7.8.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  }
+}
