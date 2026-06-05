@@ -9,14 +9,16 @@ datasource db {
 // ─── Tenant ───────────────────────────────────────────────────────────────────
 
 model Tenant {
-  id          String       @id @default(cuid())
-  name        String
-  slug        String       @unique
-  status      TenantStatus @default(TRIAL)
-  botName      String       @default("Менеджер")
-  customPrompt String?
-  createdAt    DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                String       @id @default(cuid())
+  name              String
+  slug              String       @unique
+  status            TenantStatus @default(TRIAL)
+  botName           String       @default("Менеджер")
+  customPrompt      String?
+  telegramBotToken  String       @default("")
+  telegramChatId    String       @default("")
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   users       TenantUser[]
   properties  Property[]

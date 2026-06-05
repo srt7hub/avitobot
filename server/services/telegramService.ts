@@ -18,12 +18,12 @@ async function postMessage(botToken: string, chatId: string, text: string): Prom
 }
 
 export async function sendHumanTakeoverAlert(
-  telegramContact: string,
   botToken: string,
+  chatId: string,
   avitoChatId: string,
   guestName: string
 ): Promise<void> {
-  if (!botToken || !telegramContact) return
+  if (!botToken || !chatId) return
 
   const text = [
     `🚨 <b>ЗАПРОС ОПЕРАТОРА</b>`,
@@ -32,10 +32,9 @@ export async function sendHumanTakeoverAlert(
     `Чат Авито: <a href="https://www.avito.ru/profile/messenger/channel/${avitoChatId}">Открыть диалог</a>`,
     ``,
     `Гость просит связаться с менеджером.`,
-    `@${telegramContact.replace('@', '')}`,
   ].join('\n')
 
-  await postMessage(botToken, telegramContact, text)
+  await postMessage(botToken, chatId, text)
 }
 
 export async function sendOpsAlert(message: string): Promise<void> {

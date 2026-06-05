@@ -74,15 +74,12 @@ async function processMessage(
     await markMessageProcessed(dialogue.id, botMsgId, 'BOT', HUMAN_TAKEOVER_REPLY)
     await pauseDialogue(avitoChatId, tenantId, PAUSE_MINUTES)
 
-    // Alert client's ops contact
-    const tenantUser = await prisma.tenantUser.findFirst({
-      where: { tenantId, role: 'CLIENT' },
-    })
-    if (tenantUser?.telegramContact) {
+    // Alert client via their own Telegram bot
+    if (tenant.telegramBotToken && tenant.telegramChatId) {
       const guestName = chat.users?.find(u => u.id !== Number(config.avitoUserId))?.name ?? 'Гость'
       await sendHumanTakeoverAlert(
-        tenantUser.telegramContact,
-        process.env.OPS_TELEGRAM_BOT_TOKEN ?? '',
+        tenant.telegramBotToken,
+        tenant.telegramChatId,
         avitoChatId,
         guestName
       )

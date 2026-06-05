@@ -273,6 +273,9 @@ export function opsGetMessages(tenantId: string, dialogueId: string) {
 export interface Settings {
   botName: string
   telegramContact: string
+  avitoClientId: string
+  avitoClientSecret: string
+  avitoUserId: string
 }
 
 export function fetchSettings() {
@@ -281,6 +284,13 @@ export function fetchSettings() {
 
 export function updateSettings(payload: { botName?: string; telegramContact?: string }) {
   return request('/client/settings', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function updateAvitoConfig(payload: { avitoClientId: string; avitoClientSecret: string; avitoUserId: string }) {
+  return request('/client/settings/avito', {
     method: 'PUT',
     body: JSON.stringify(payload),
   })

@@ -39,7 +39,7 @@ router.get('/clients', async (_req, res) => {
 })
 
 router.post('/clients', async (req, res) => {
-  const { name, slug, botName, managerEmail, managerPassword, managerName, telegramContact } =
+  const { name, slug, botName, managerEmail, managerPassword, managerName, telegramBotToken, telegramChatId } =
     req.body as {
       name?: string
       slug?: string
@@ -47,7 +47,8 @@ router.post('/clients', async (req, res) => {
       managerEmail?: string
       managerPassword?: string
       managerName?: string
-      telegramContact?: string
+      telegramBotToken?: string
+      telegramChatId?: string
     }
 
   if (!name?.trim() || !slug?.trim() || !managerEmail?.trim() || !managerPassword) {
@@ -67,13 +68,14 @@ router.post('/clients', async (req, res) => {
         name: name.trim(),
         slug: slug.trim(),
         botName: botName?.trim() ?? 'Менеджер',
+        telegramBotToken: telegramBotToken?.trim() ?? '',
+        telegramChatId: telegramChatId?.trim() ?? '',
         users: {
           create: {
             email: managerEmail.trim().toLowerCase(),
             password: hash,
             role: 'CLIENT',
             name: managerName?.trim() ?? managerEmail.trim(),
-            telegramContact: telegramContact?.trim() ?? '',
           },
         },
         botSessions: {
@@ -133,10 +135,12 @@ router.get('/clients/:tenantId', async (req, res) => {
 
 router.put('/clients/:tenantId', async (req, res) => {
   const { tenantId } = req.params
-  const { name, botName, status } = req.body as {
+  const { name, botName, status, telegramBotToken, telegramChatId } = req.body as {
     name?: string
     botName?: string
     status?: 'TRIAL' | 'ACTIVE' | 'PAUSED' | 'CANCELLED'
+    telegramBotToken?: string
+    telegramChatId?: string
   }
 
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
@@ -152,6 +156,8 @@ router.put('/clients/:tenantId', async (req, res) => {
         ...(name !== undefined && { name: name.trim() }),
         ...(botName !== undefined && { botName: botName.trim() }),
         ...(status !== undefined && { status }),
+        ...(telegramBotToken !== undefined && { telegramBotToken: telegramBotToken.trim() }),
+        ...(telegramChatId !== undefined && { telegramChatId: telegramChatId.trim() }),
       },
     })
     res.json(updated)
