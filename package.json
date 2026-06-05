@@ -12,7 +12,8 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "seed": "tsx server/seed.ts"
+    "seed": "tsx server/seed.ts",
+    "deploy": "bash scripts/deploy.sh"
   },
   "repository": {
     "type": "git",

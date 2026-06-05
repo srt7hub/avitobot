@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 import { authMiddleware } from './middleware/auth.js'
 import { clientOnly } from './middleware/clientOnly.js'
 import { opsOnly } from './middleware/auth.js'
@@ -12,12 +13,29 @@ import clientsRoutes from './routes/ops/clients.js'
 import avitoRoutes from './routes/ops/avito.js'
 import contentRoutes from './routes/ops/content.js'
 import logsRoutes from './routes/ops/logs.js'
+import prisma from './prisma.js'
 
 const app = express()
 app.use(cors())
 app.use(express.json())
 
-app.get('/api/health', (_, res) => res.json({ status: 'ok', service: 'avitobot-api' }))
+app.use(rateLimit({
+  windowMs: 60_000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests' },
+}))
+
+app.get('/api/health', async (_, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    const activeBots = await prisma.botSession.count({ where: { isRunning: true } })
+    res.json({ status: 'ok', service: 'avitobot-api', db: 'connected', activeBots, uptime: process.uptime() })
+  } catch {
+    res.status(503).json({ status: 'error', db: 'disconnected' })
+  }
+})
 
 app.use('/api/auth', authRoutes)
 

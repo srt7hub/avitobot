@@ -7,15 +7,22 @@ module.exports = {
       max_memory_restart: '512M',
       restart_delay: 3000,
       kill_timeout: 30000,
-      env: { NODE_ENV: 'production' }
+      watch: false,
+      env: {
+        NODE_ENV: 'production',
+        API_PORT: '3010'
+      }
     },
     {
       name: 'avitobot-bot',
       script: 'server/bot.ts',
       interpreter: 'tsx',
-      instances: 1,
+      instances: 1,        // СТРОГО 1 — иначе dedup сломается
       kill_timeout: 30000,
-      env: { NODE_ENV: 'production' }
+      watch: false,
+      env: {
+        NODE_ENV: 'production'
+      }
     }
   ]
 }
