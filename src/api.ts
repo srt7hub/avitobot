@@ -151,7 +151,124 @@ export function updateProperty(
   })
 }
 
-// Settings
+// ─── OPS API ──────────────────────────────────────────────────────────────────
+
+export interface OpsClientSummary {
+  id: string
+  name: string
+  slug: string
+  status: string
+  bot: { isRunning: boolean; lastPollAt: string | null; errorCount: number; todayMessages: number }
+  hasAvitoConfig: boolean
+  createdAt: string
+}
+
+export interface OpsClientDetail {
+  tenant: {
+    id: string; name: string; slug: string; botName: string; status: string; customPrompt: string | null
+  }
+  avitoConfig: {
+    avitoClientId: string; avitoClientSecret: string; avitoUserId: string; refreshToken: string
+  } | null
+  properties: Property[]
+  botSession: { isRunning: boolean; errorCount: number; lastError: string; messagesDay: number; messagesWeek: number; messagesMonth: number; autoReplyRate: number } | null
+  recentErrors: string[]
+  stats: { totalFaq: number; totalProperties: number; totalDialogues: number }
+}
+
+export interface OpsStatus {
+  totalClients: number; runningBots: number; errorBots: number; totalMessagesToday: number
+}
+
+export interface OpsDialogue {
+  id: string; guestName: string; updatedAt: string; pausedUntil: string | null
+  messages: { content: string; role: string; processedAt: string }[]
+}
+
+export interface OpsMessage {
+  id: string; role: string; content: string; processedAt: string
+}
+
+export function opsGetStatus() {
+  return request<OpsStatus>('/ops/status')
+}
+
+export function opsListClients() {
+  return request<{ clients: OpsClientSummary[] }>('/ops/clients')
+}
+
+export function opsGetClient(tenantId: string) {
+  return request<OpsClientDetail>(`/ops/clients/${tenantId}`)
+}
+
+export function opsCreateClient(payload: {
+  name: string; slug: string; botName?: string
+  managerEmail: string; managerPassword: string; managerName?: string; telegramContact?: string
+}) {
+  return request<{ tenantId: string }>('/ops/clients', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function opsUpdateClient(tenantId: string, payload: { name?: string; botName?: string; status?: string }) {
+  return request(`/ops/clients/${tenantId}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export function opsListFaq(tenantId: string) {
+  return request<FaqEntry[]>(`/ops/clients/${tenantId}/faq`)
+}
+
+export function opsCreateFaq(tenantId: string, payload: { question: string; answer: string; propertyId?: string }) {
+  return request<FaqEntry>(`/ops/clients/${tenantId}/faq`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function opsUpdateFaq(tenantId: string, faqId: string, payload: { question?: string; answer?: string; isActive?: boolean }) {
+  return request<FaqEntry>(`/ops/clients/${tenantId}/faq/${faqId}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export function opsDeleteFaq(tenantId: string, faqId: string) {
+  return request(`/ops/clients/${tenantId}/faq/${faqId}`, { method: 'DELETE' })
+}
+
+export function opsGetPrompt(tenantId: string) {
+  return request<{ prompt: string; isCustom: boolean }>(`/ops/clients/${tenantId}/prompt`)
+}
+
+export function opsSavePrompt(tenantId: string, prompt: string) {
+  return request(`/ops/clients/${tenantId}/prompt`, { method: 'PUT', body: JSON.stringify({ prompt }) })
+}
+
+export function opsListProperties(tenantId: string) {
+  return request<Property[]>(`/ops/clients/${tenantId}/properties`)
+}
+
+export function opsCreateProperty(tenantId: string, payload: { name: string; address: string; description: string; avitoItemId?: string }) {
+  return request<Property>(`/ops/clients/${tenantId}/properties`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function opsUpdateProperty(tenantId: string, propertyId: string, payload: { name?: string; address?: string; description?: string; avitoItemId?: string; isActive?: boolean }) {
+  return request<Property>(`/ops/clients/${tenantId}/properties/${propertyId}`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export function opsSaveAvitoConfig(tenantId: string, payload: { avitoClientId: string; avitoClientSecret: string; avitoUserId: string; refreshToken?: string }) {
+  return request(`/ops/clients/${tenantId}/avito`, { method: 'PUT', body: JSON.stringify(payload) })
+}
+
+export function opsTestAvito(tenantId: string) {
+  return request<{ ok: boolean; chatCount?: number; error?: string }>(`/ops/clients/${tenantId}/avito/test`, { method: 'POST' })
+}
+
+export function opsBotRestart(tenantId: string) {
+  return request(`/ops/clients/${tenantId}/bot/restart`, { method: 'POST' })
+}
+
+export function opsListDialogues(tenantId: string) {
+  return request<OpsDialogue[]>(`/ops/clients/${tenantId}/dialogues`)
+}
+
+export function opsGetMessages(tenantId: string, dialogueId: string) {
+  return request<OpsMessage[]>(`/ops/clients/${tenantId}/dialogues/${dialogueId}/messages`)
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
 
 export interface Settings {
   botName: string

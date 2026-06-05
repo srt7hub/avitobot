@@ -12,15 +12,30 @@ export function removeToken(): void {
   localStorage.removeItem(TOKEN_KEY)
 }
 
-export function isAuthenticated(): boolean {
+interface JwtPayload {
+  userId: string
+  tenantId: string | null
+  role: 'CLIENT' | 'OPS'
+  exp: number
+}
+
+function decodeToken(): JwtPayload | null {
   const token = getToken()
-  if (!token) return false
+  if (!token) return null
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    return payload.exp * 1000 > Date.now()
+    return JSON.parse(atob(token.split('.')[1])) as JwtPayload
   } catch {
-    return false
+    return null
   }
+}
+
+export function isAuthenticated(): boolean {
+  const payload = decodeToken()
+  return payload !== null && payload.exp * 1000 > Date.now()
+}
+
+export function getRole(): 'CLIENT' | 'OPS' | null {
+  return decodeToken()?.role ?? null
 }
 
 export function logout(): void {
