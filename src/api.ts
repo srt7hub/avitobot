@@ -155,7 +155,7 @@ export interface AvitoItem {
   id: number
   title: string
   price: number | null
-  address: { city?: string; metro?: string; district?: string } | null
+  address: string | null
   images: Array<{ '208x156'?: string; '640x480'?: string; '1280x960'?: string }>
   status: string
   url: string

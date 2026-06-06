@@ -233,7 +233,7 @@ export interface AvitoItem {
   id: number
   title: string
   price: number | null
-  address: { city?: string; metro?: string; district?: string } | null
+  address: string | null
   images: Array<{ '208x156'?: string; '640x480'?: string; '1280x960'?: string }>
   status: string
   url: string
@@ -242,7 +242,7 @@ export interface AvitoItem {
 export async function getItemsByUser(config: TenantAvitoConfig): Promise<AvitoItem[]> {
   return withToken(config, async (token, userId) => {
     const res = await fetch(
-      `${BASE_URL}/core/v1/accounts/${userId}/items?per_page=50&page=1`,
+      `${BASE_URL}/core/v1/items?per_page=50&page=1&status=active,old,blocked,rejected,removed,closed`,
       { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }
     )
     if (!res.ok) {

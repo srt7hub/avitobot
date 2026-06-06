@@ -19,7 +19,7 @@ function AvitoItemCard({ item }: { item: AvitoItem }) {
     .map(img => img['640x480'] || img['208x156'] || img['1280x960'])
     .filter(Boolean) as string[]
   const status = statusLabel(item.status)
-  const addressParts = [item.address?.city, item.address?.district, item.address?.metro].filter(Boolean)
+  const addressText = item.address ?? null
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -73,8 +73,8 @@ function AvitoItemCard({ item }: { item: AvitoItem }) {
             {item.price === 0 ? 'Цена не указана' : `${item.price.toLocaleString('ru-RU')} ₽`}
           </p>
         )}
-        {addressParts.length > 0 && (
-          <p className="text-xs text-gray-500">{addressParts.join(', ')}</p>
+        {addressText && (
+          <p className="text-xs text-gray-500">{addressText}</p>
         )}
         <a
           href={item.url}
