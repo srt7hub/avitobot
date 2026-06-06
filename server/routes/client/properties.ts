@@ -23,6 +23,57 @@ router.get('/properties/avito-data', async (req, res) => {
   }
 })
 
+// Объявления Авито + привязанный к каждому Property (автосоздаётся при отсутствии).
+// Используется фильтром «Объект» в Базе знаний: список = объявления, FAQ привязан к Property.
+router.get('/properties/listings', async (req, res) => {
+  const tenantId = req.auth!.tenantId!
+
+  try {
+    const avitoConfig = await prisma.tenantAvitoConfig.findUnique({ where: { tenantId } })
+    if (!avitoConfig?.accessToken) {
+      res.json({ listings: [] })
+      return
+    }
+
+    const items = await getItemsByUser(avitoConfig as TenantAvitoConfig)
+
+    const existing = await prisma.property.findMany({ where: { tenantId } })
+    const byAvitoId = new Map(existing.filter(p => p.avitoItemId).map(p => [p.avitoItemId, p]))
+
+    const listings = []
+    for (const item of items) {
+      const avitoItemId = String(item.id)
+      let property = byAvitoId.get(avitoItemId)
+      if (!property) {
+        property = await prisma.property.create({
+          data: {
+            tenantId,
+            name: item.title,
+            address: item.address ?? '',
+            avitoItemId,
+            isActive: true,
+          },
+        })
+        byAvitoId.set(avitoItemId, property)
+      }
+      listings.push({
+        propertyId: property.id,
+        avitoItemId,
+        title: item.title,
+        address: item.address,
+        status: item.status,
+        price: item.price,
+        url: item.url,
+      })
+    }
+
+    res.json({ listings })
+  } catch (err) {
+    console.error('[properties/listings GET] error:', err)
+    res.status(500).json({ error: 'Не удалось загрузить объявления' })
+  }
+})
+
 router.get('/properties', async (req, res) => {
   const tenantId = req.auth!.tenantId!
 

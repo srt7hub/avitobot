@@ -1,14 +1,14 @@
 import { useState, FormEvent } from 'react'
-import { Property } from '../../api'
+import { Listing } from '../../api'
 
 interface Props {
-  properties: Property[]
+  listings: Listing[]
   initialQuestion?: string
   onSave: (question: string, answer: string, propertyId?: string) => Promise<void>
   onCancel: () => void
 }
 
-export default function FaqForm({ properties, initialQuestion = '', onSave, onCancel }: Props) {
+export default function FaqForm({ listings, initialQuestion = '', onSave, onCancel }: Props) {
   const [question, setQuestion] = useState(initialQuestion)
   const [answer, setAnswer] = useState('')
   const [propertyId, setPropertyId] = useState('')
@@ -62,8 +62,8 @@ export default function FaqForm({ properties, initialQuestion = '', onSave, onCa
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 bg-white"
         >
           <option value="">Все объекты</option>
-          {properties.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+          {listings.map(l => (
+            <option key={l.propertyId} value={l.propertyId}>{l.title}</option>
           ))}
         </select>
       </div>

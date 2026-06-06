@@ -165,6 +165,21 @@ export function fetchAvitoItems() {
   return request<{ items: AvitoItem[] }>('/client/properties/avito-data')
 }
 
+// Объявления Авито с привязанным propertyId (для фильтра в Базе знаний)
+export interface Listing {
+  propertyId: string
+  avitoItemId: string
+  title: string
+  address: string | null
+  status: string
+  price: number | null
+  url: string
+}
+
+export function fetchListings() {
+  return request<{ listings: Listing[] }>('/client/properties/listings')
+}
+
 // ─── OPS API ──────────────────────────────────────────────────────────────────
 
 export interface OpsClientSummary {

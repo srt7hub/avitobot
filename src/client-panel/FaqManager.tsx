@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import {
   fetchFaq, createFaq, updateFaq, deleteFaq,
-  fetchUnhandled, fetchProperties,
-  FaqEntry, FaqData, UnhandledQuestion, Property,
+  fetchUnhandled, fetchListings,
+  FaqEntry, FaqData, UnhandledQuestion, Listing,
 } from '../api'
 import FaqForm from './components/FaqForm'
 import UnhandledList from './components/UnhandledList'
@@ -10,7 +10,7 @@ import UnhandledList from './components/UnhandledList'
 export default function FaqManager() {
   const [faqData, setFaqData] = useState<FaqData | null>(null)
   const [unhandled, setUnhandled] = useState<UnhandledQuestion[]>([])
-  const [properties, setProperties] = useState<Property[]>([])
+  const [listings, setListings] = useState<Listing[]>([])
   const [filterPropertyId, setFilterPropertyId] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -24,14 +24,14 @@ export default function FaqManager() {
     setLoading(true)
     setError('')
     try {
-      const [faq, uq, props] = await Promise.all([
+      const [faq, uq, lst] = await Promise.all([
         fetchFaq(),
         fetchUnhandled(),
-        fetchProperties(),
+        fetchListings(),
       ])
       if (faq) setFaqData(faq)
       if (uq) setUnhandled(uq)
-      if (props) setProperties(props)
+      if (lst) setListings(lst.listings)
     } catch {
       setError('Не удалось загрузить данные')
     } finally {
@@ -93,7 +93,7 @@ export default function FaqManager() {
   const entries = getFilteredEntries()
   const propertyName = (propertyId: string | null) => {
     if (!propertyId) return 'Все объекты'
-    return properties.find(p => p.id === propertyId)?.name ?? 'Объект'
+    return listings.find(l => l.propertyId === propertyId)?.title ?? 'Объект'
   }
 
   if (loading) {
@@ -126,7 +126,7 @@ export default function FaqManager() {
 
       {showAddForm && (
         <FaqForm
-          properties={properties}
+          listings={listings}
           onSave={handleAdd}
           onCancel={() => setShowAddForm(false)}
         />
@@ -140,8 +140,8 @@ export default function FaqManager() {
           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 bg-white"
         >
           <option value="">Все объекты</option>
-          {properties.map(p => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+          {listings.map(l => (
+            <option key={l.propertyId} value={l.propertyId}>{l.title}</option>
           ))}
         </select>
       </div>
