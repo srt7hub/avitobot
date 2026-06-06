@@ -16,6 +16,8 @@ import contentRoutes from './routes/ops/content.js'
 import logsRoutes from './routes/ops/logs.js'
 import prisma from './prisma.js'
 
+const AVITO_OAUTH_SCOPE = 'messenger:read messenger:write items:info'
+
 const app = express()
 app.use(cors())
 app.use(express.json())
@@ -39,6 +41,77 @@ app.get('/api/health', async (_, res) => {
 })
 
 app.use('/api/auth', authRoutes)
+
+// Public OAuth callback — Авито редиректит сюда без JWT
+app.get('/api/client/settings/avito-oauth/callback', async (req, res) => {
+  const { code, state, error: oauthError } = req.query as Record<string, string>
+
+  const frontendBase = process.env.APP_URL ?? 'https://avitobot.ru'
+
+  if (oauthError) {
+    res.redirect(`${frontendBase}/?avito_oauth=error&reason=${encodeURIComponent(oauthError)}`)
+    return
+  }
+
+  if (!code || !state) {
+    res.redirect(`${frontendBase}/?avito_oauth=error&reason=missing_params`)
+    return
+  }
+
+  let tenantId: string
+  try {
+    const parsed = JSON.parse(Buffer.from(state, 'base64url').toString())
+    tenantId = parsed.tenantId
+  } catch {
+    res.redirect(`${frontendBase}/?avito_oauth=error&reason=invalid_state`)
+    return
+  }
+
+  const avitoConfig = await prisma.tenantAvitoConfig.findUnique({ where: { tenantId } })
+  if (!avitoConfig) {
+    res.redirect(`${frontendBase}/?avito_oauth=error&reason=no_config`)
+    return
+  }
+
+  const redirectUri = `${frontendBase}/api/client/settings/avito-oauth/callback`
+
+  try {
+    const tokenRes = await fetch('https://api.avito.ru/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: avitoConfig.avitoClientId,
+        client_secret: avitoConfig.avitoClientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
+    })
+
+    if (!tokenRes.ok) {
+      const body = await tokenRes.text()
+      console.error('[avito-oauth callback] token exchange failed:', body)
+      res.redirect(`${frontendBase}/?avito_oauth=error&reason=token_exchange`)
+      return
+    }
+
+    const data = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number }
+
+    await prisma.tenantAvitoConfig.update({
+      where: { tenantId },
+      data: {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token ?? '',
+        tokenExpiresAt: new Date(Date.now() + data.expires_in * 1000),
+      },
+    })
+
+    res.redirect(`${frontendBase}/?avito_oauth=success`)
+  } catch (err) {
+    console.error('[avito-oauth callback] error:', err)
+    res.redirect(`${frontendBase}/?avito_oauth=error&reason=server_error`)
+  }
+})
 
 app.use('/api/client', authMiddleware, clientOnly, dashboardRoutes)
 app.use('/api/client', authMiddleware, clientOnly, faqRoutes)

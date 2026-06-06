@@ -23,7 +23,7 @@ function PasswordField({ value, onChange, placeholder }: { value: string; onChan
     </div>
   )
 }
-import { fetchSettings, updateSettings, updateAvitoConfig, checkAvitoConnection, updateTelegramConfig, testTelegramConnection, Settings } from '../api'
+import { fetchSettings, updateSettings, updateAvitoConfig, checkAvitoConnection, updateTelegramConfig, testTelegramConnection, fetchAvitoOAuthUrl, Settings } from '../api'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -118,6 +118,16 @@ export default function SettingsPage() {
 
   const [testingTg, setTestingTg] = useState(false)
   const [tgTestResult, setTgTestResult] = useState<{ ok: boolean; error?: string } | null>(null)
+  const [oauthLoading, setOauthLoading] = useState(false)
+  const [oauthResult, setOauthResult] = useState<{ ok: boolean; error?: string } | null>(() => {
+    const raw = sessionStorage.getItem('avito_oauth_result')
+    if (!raw) return null
+    sessionStorage.removeItem('avito_oauth_result')
+    try {
+      const parsed = JSON.parse(raw) as { ok: boolean; reason?: string }
+      return { ok: parsed.ok, error: parsed.reason }
+    } catch { return null }
+  })
 
   async function handleTgTest() {
     setTestingTg(true)
@@ -129,6 +139,20 @@ export default function SettingsPage() {
       setTgTestResult({ ok: false, error: 'Ошибка подключения' })
     } finally {
       setTestingTg(false)
+    }
+  }
+
+  async function handleAvitoOAuth() {
+    setOauthLoading(true)
+    setOauthResult(null)
+    try {
+      const result = await fetchAvitoOAuthUrl()
+      if (result?.url) {
+        window.location.href = result.url
+      }
+    } catch (err: unknown) {
+      setOauthResult({ ok: false, error: err instanceof Error ? err.message : 'Ошибка' })
+      setOauthLoading(false)
     }
   }
 
@@ -304,6 +328,26 @@ export default function SettingsPage() {
             >
               {checkingAvito ? 'Проверка...' : 'Проверить подключение'}
             </button>
+          </div>
+
+          <div className="border-t border-gray-100 pt-4 mt-2">
+            <p className="text-xs text-gray-500 mb-3">
+              Для доступа к объявлениям нужна авторизация через Авито. После сохранения ключей нажмите кнопку ниже — вас перенаправят на страницу Авито для подтверждения доступа.
+            </p>
+            {oauthResult && (
+              <div className={`rounded-lg px-4 py-3 text-sm mb-3 ${oauthResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                {oauthResult.ok ? '✓ Авито успешно авторизован — объявления доступны' : `✗ Ошибка авторизации: ${oauthResult.error}`}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleAvitoOAuth}
+              disabled={oauthLoading || !avitoClientId}
+              className="flex items-center gap-2 bg-[#00AFFE] hover:bg-[#0099e0] text-white rounded-lg px-6 py-2 text-sm font-medium disabled:opacity-50 transition-colors"
+            >
+              {oauthLoading ? 'Переход...' : 'Войти через Авито'}
+            </button>
+            {!avitoClientId && <p className="text-xs text-gray-400 mt-1">Сначала сохраните Client ID</p>}
           </div>
         </form>
       </div>

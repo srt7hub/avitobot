@@ -126,6 +126,18 @@ export default function App() {
   const [authed, setAuthed] = useState(isAuthenticated)
 
   useEffect(() => {
+    // После OAuth редиректа от Авито — сохраняем результат и переходим на настройки
+    const params = new URLSearchParams(window.location.search)
+    const avitoOauth = params.get('avito_oauth')
+    if (avitoOauth) {
+      sessionStorage.setItem('avito_oauth_result', JSON.stringify({
+        ok: avitoOauth === 'success',
+        reason: params.get('reason') ?? undefined,
+      }))
+      window.history.replaceState({}, '', '/#/settings')
+      window.location.hash = '#/settings'
+    }
+
     function onHash() { setAuthed(isAuthenticated()) }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)

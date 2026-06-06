@@ -2,6 +2,8 @@ import { Router } from 'express'
 import prisma from '../../prisma.js'
 import { refreshTokenIfNeeded } from '../../services/avitoService.js'
 
+const AVITO_OAUTH_SCOPE = 'messenger:read messenger:write items:info'
+
 const router = Router()
 
 router.get('/settings', async (req, res) => {
@@ -172,6 +174,29 @@ router.put('/settings/telegram', async (req, res) => {
     console.error('[settings/telegram PUT] error:', err)
     res.status(500).json({ error: 'Internal server error' })
   }
+})
+
+// GET /settings/avito-oauth/url — генерирует ссылку для авторизации через Авито
+router.get('/settings/avito-oauth/url', async (req, res) => {
+  const { tenantId } = req.auth!
+
+  const avitoConfig = await prisma.tenantAvitoConfig.findUnique({ where: { tenantId: tenantId! } })
+  if (!avitoConfig?.avitoClientId) {
+    res.status(400).json({ error: 'Сначала сохраните Client ID' })
+    return
+  }
+
+  const redirectUri = `${process.env.APP_URL ?? 'https://avitobot.ru'}/api/client/settings/avito-oauth/callback`
+  const state = Buffer.from(JSON.stringify({ tenantId })).toString('base64url')
+
+  const url = new URL('https://avito.ru/oauth')
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('client_id', avitoConfig.avitoClientId)
+  url.searchParams.set('scope', AVITO_OAUTH_SCOPE)
+  url.searchParams.set('redirect_uri', redirectUri)
+  url.searchParams.set('state', state)
+
+  res.json({ url: url.toString() })
 })
 
 export default router

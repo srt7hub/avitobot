@@ -317,6 +317,10 @@ export function checkAvitoConnection() {
   return request<{ ok: boolean; error?: string }>('/client/settings/avito-check')
 }
 
+export function fetchAvitoOAuthUrl() {
+  return request<{ url: string }>('/client/settings/avito-oauth/url')
+}
+
 export function updateTelegramConfig(payload: { telegramBotToken?: string; telegramChatId?: string }) {
   return request('/client/settings/telegram', {
     method: 'PUT',
