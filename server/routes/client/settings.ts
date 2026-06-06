@@ -25,6 +25,7 @@ router.get('/settings', async (req, res) => {
       telegramContact: user.telegramContact,
       avitoClientId: avitoConfig?.avitoClientId ?? '',
       avitoUserId: avitoConfig?.avitoUserId ?? '',
+      telegramChatId: tenant.telegramChatId ?? '',
     })
   } catch (err) {
     console.error('[settings GET] error:', err)
@@ -120,6 +121,28 @@ router.put('/settings/avito', async (req, res) => {
     res.json({ ok: true })
   } catch (err) {
     console.error('[settings/avito PUT] error:', err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.put('/settings/telegram', async (req, res) => {
+  const { tenantId } = req.auth!
+  const { telegramBotToken, telegramChatId } = req.body as {
+    telegramBotToken?: string
+    telegramChatId?: string
+  }
+
+  try {
+    await prisma.tenant.update({
+      where: { id: tenantId! },
+      data: {
+        ...(telegramBotToken && telegramBotToken.trim() && { telegramBotToken: telegramBotToken.trim() }),
+        ...(telegramChatId !== undefined && { telegramChatId: telegramChatId.trim() }),
+      },
+    })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[settings/telegram PUT] error:', err)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

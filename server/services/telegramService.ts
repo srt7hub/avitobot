@@ -29,9 +29,57 @@ export async function sendHumanTakeoverAlert(
     `🚨 <b>ЗАПРОС ОПЕРАТОРА</b>`,
     ``,
     `Гость: <b>${guestName}</b>`,
-    `Чат Авито: <a href="https://www.avito.ru/profile/messenger/channel/${avitoChatId}">Открыть диалог</a>`,
+    `<a href="https://www.avito.ru/profile/messenger/channel/${avitoChatId}">Открыть диалог</a>`,
     ``,
     `Гость просит связаться с менеджером.`,
+  ].join('\n')
+
+  await postMessage(botToken, chatId, text)
+}
+
+export async function sendDialogueNotification(
+  botToken: string,
+  chatId: string,
+  avitoChatId: string,
+  guestName: string,
+  guestMessage: string,
+  aiReply: string
+): Promise<void> {
+  if (!botToken || !chatId) return
+
+  const text = [
+    `💬 <b>${guestName}</b>`,
+    `${guestMessage.slice(0, 300)}`,
+    ``,
+    `🤖 <b>AI:</b>`,
+    `${aiReply.slice(0, 300)}`,
+    ``,
+    `<a href="https://www.avito.ru/profile/messenger/channel/${avitoChatId}">Открыть диалог</a>`,
+  ].join('\n')
+
+  await postMessage(botToken, chatId, text)
+}
+
+export async function sendUnknownAnswerAlert(
+  botToken: string,
+  chatId: string,
+  avitoChatId: string,
+  guestName: string,
+  guestMessage: string,
+  aiReply: string
+): Promise<void> {
+  if (!botToken || !chatId) return
+
+  const text = [
+    `⚠️ <b>Бот не знает ответ</b>`,
+    ``,
+    `Гость: <b>${guestName}</b>`,
+    `${guestMessage.slice(0, 300)}`,
+    ``,
+    `🤖 <b>AI ответил:</b>`,
+    `${aiReply.slice(0, 300)}`,
+    ``,
+    `<a href="https://www.avito.ru/profile/messenger/channel/${avitoChatId}">Открыть диалог</a>`,
   ].join('\n')
 
   await postMessage(botToken, chatId, text)

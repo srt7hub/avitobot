@@ -12,7 +12,7 @@ import {
   getRecentMessages,
 } from './services/memoryService.js'
 import { getFaqForProperty } from './services/faqService.js'
-import { sendHumanTakeoverAlert, sendOpsAlert } from './services/telegramService.js'
+import { sendHumanTakeoverAlert, sendDialogueNotification, sendUnknownAnswerAlert, sendOpsAlert } from './services/telegramService.js'
 import type { AvitoChat, AvitoMessage } from './services/avitoService.js'
 import type { TenantAvitoConfig as PrismaTenantAvitoConfig, Tenant } from '@prisma/client'
 
@@ -134,6 +134,17 @@ async function processMessage(
     update: { messagesDay: { increment: 1 }, messagesWeek: { increment: 1 }, messagesMonth: { increment: 1 }, lastPollAt: new Date(), errorCount: 0 },
     create: { tenantId, messagesDay: 1, messagesWeek: 1, messagesMonth: 1, isRunning: true },
   })
+
+  // Telegram notifications
+  if (tenant.telegramBotToken && tenant.telegramChatId) {
+    const guestName = chat.users?.find(u => u.id !== Number(config.avitoUserId))?.name ?? 'Гость'
+    const isUnknown = filteredReply.includes('Уточню и вернусь с ответом')
+    if (isUnknown) {
+      await sendUnknownAnswerAlert(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, msgText, filteredReply)
+    } else {
+      await sendDialogueNotification(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, msgText, filteredReply)
+    }
+  }
 
   console.log(`[bot][${tenantId}] Replied to chat ${avitoChatId}: "${filteredReply.slice(0, 60)}..."`)
 }

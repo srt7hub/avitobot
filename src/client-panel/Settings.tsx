@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react'
-import { fetchSettings, updateSettings, updateAvitoConfig, checkAvitoConnection, Settings } from '../api'
+import { fetchSettings, updateSettings, updateAvitoConfig, checkAvitoConnection, updateTelegramConfig, Settings } from '../api'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -9,15 +9,20 @@ export default function SettingsPage() {
   const [avitoClientId, setAvitoClientId] = useState('')
   const [avitoClientSecret, setAvitoClientSecret] = useState('')
   const [avitoUserId, setAvitoUserId] = useState('')
+  const [tgBotToken, setTgBotToken] = useState('')
+  const [tgChatId, setTgChatId] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingAvito, setSavingAvito] = useState(false)
+  const [savingTg, setSavingTg] = useState(false)
   const [checkingAvito, setCheckingAvito] = useState(false)
   const [avitoCheckResult, setAvitoCheckResult] = useState<{ ok: boolean; error?: string } | null>(null)
   const [error, setError] = useState('')
   const [avitoError, setAvitoError] = useState('')
+  const [tgError, setTgError] = useState('')
   const [saved, setSaved] = useState(false)
   const [avitoSaved, setAvitoSaved] = useState(false)
+  const [tgSaved, setTgSaved] = useState(false)
 
   useEffect(() => {
     fetchSettings().then(data => {
@@ -28,6 +33,7 @@ export default function SettingsPage() {
         setCustomPrompt(data.customPrompt ?? '')
         setAvitoClientId(data.avitoClientId ?? '')
         setAvitoUserId(data.avitoUserId ?? '')
+        setTgChatId(data.telegramChatId ?? '')
       }
       setLoading(false)
     }).catch(() => {
@@ -64,6 +70,22 @@ export default function SettingsPage() {
       setAvitoError(err instanceof Error ? err.message : 'Ошибка сохранения')
     } finally {
       setSavingAvito(false)
+    }
+  }
+
+  async function handleTgSubmit(e: FormEvent) {
+    e.preventDefault()
+    setSavingTg(true)
+    setTgSaved(false)
+    setTgError('')
+    try {
+      await updateTelegramConfig({ telegramBotToken: tgBotToken, telegramChatId: tgChatId })
+      setTgSaved(true)
+      setTgBotToken('')
+    } catch (err: unknown) {
+      setTgError(err instanceof Error ? err.message : 'Ошибка сохранения')
+    } finally {
+      setSavingTg(false)
     }
   }
 
@@ -154,6 +176,49 @@ export default function SettingsPage() {
             className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             {saving ? 'Сохранение...' : 'Сохранить инструкцию'}
+          </button>
+        </form>
+      </div>
+
+      {/* Telegram уведомления */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-1">Telegram уведомления</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Бот будет слать уведомления о каждом диалоге, запросе оператора и неизвестных вопросах.
+          Создайте бота через <span className="font-mono">@BotFather</span>, получите токен и Chat ID.
+        </p>
+        <form onSubmit={handleTgSubmit} className="space-y-5 max-w-md">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Bot Token</label>
+            <input
+              type="password"
+              value={tgBotToken}
+              onChange={e => setTgBotToken(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
+              placeholder={settings?.telegramChatId ? '••••••••••••••••••••••• (оставьте пустым чтобы не менять)' : '123456789:ABC...'}
+              autoComplete="off"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Chat ID</label>
+            <input
+              type="text"
+              value={tgChatId}
+              onChange={e => setTgChatId(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
+              placeholder="-1001234567890"
+              autoComplete="off"
+            />
+            <p className="text-xs text-gray-400 mt-1">Используйте @userinfobot чтобы узнать Chat ID</p>
+          </div>
+          {tgError && <p className="text-sm text-red-500">{tgError}</p>}
+          {tgSaved && <p className="text-sm text-emerald-600">Telegram настроен</p>}
+          <button
+            type="submit"
+            disabled={savingTg}
+            className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          >
+            {savingTg ? 'Сохранение...' : 'Сохранить'}
           </button>
         </form>
       </div>

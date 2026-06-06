@@ -276,6 +276,7 @@ export interface Settings {
   telegramContact: string
   avitoClientId: string
   avitoUserId: string
+  telegramChatId: string
 }
 
 export function fetchSettings() {
@@ -298,6 +299,13 @@ export function updateAvitoConfig(payload: { avitoClientId: string; avitoClientS
 
 export function checkAvitoConnection() {
   return request<{ ok: boolean; error?: string }>('/client/settings/avito-check')
+}
+
+export function updateTelegramConfig(payload: { telegramBotToken?: string; telegramChatId?: string }) {
+  return request('/client/settings/telegram', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
 }
 
 // ─── Dialogues ────────────────────────────────────────────────────────────────
