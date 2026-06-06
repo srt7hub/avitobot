@@ -23,7 +23,7 @@ function PasswordField({ value, onChange, placeholder }: { value: string; onChan
     </div>
   )
 }
-import { fetchSettings, updateSettings, updateAvitoConfig, checkAvitoConnection, updateTelegramConfig, Settings } from '../api'
+import { fetchSettings, updateSettings, updateAvitoConfig, checkAvitoConnection, updateTelegramConfig, testTelegramConnection, Settings } from '../api'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -116,6 +116,22 @@ export default function SettingsPage() {
     }
   }
 
+  const [testingTg, setTestingTg] = useState(false)
+  const [tgTestResult, setTgTestResult] = useState<{ ok: boolean; error?: string } | null>(null)
+
+  async function handleTgTest() {
+    setTestingTg(true)
+    setTgTestResult(null)
+    try {
+      const result = await testTelegramConnection()
+      setTgTestResult(result ?? { ok: false, error: 'Нет ответа' })
+    } catch {
+      setTgTestResult({ ok: false, error: 'Ошибка подключения' })
+    } finally {
+      setTestingTg(false)
+    }
+  }
+
   async function handleCheckAvito() {
     setCheckingAvito(true)
     setAvitoCheckResult(null)
@@ -192,13 +208,28 @@ export default function SettingsPage() {
           </div>
           {tgError && <p className="text-sm text-red-500">{tgError}</p>}
           {tgSaved && <p className="text-sm text-emerald-600">Telegram настроен</p>}
-          <button
-            type="submit"
-            disabled={savingTg}
-            className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
-          >
-            {savingTg ? 'Сохранение...' : 'Сохранить'}
-          </button>
+          {tgTestResult && (
+            <div className={`rounded-lg px-4 py-3 text-sm ${tgTestResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+              {tgTestResult.ok ? '✓ Тестовое сообщение отправлено' : `✗ Ошибка: ${tgTestResult.error}`}
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              disabled={savingTg}
+              className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              {savingTg ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            <button
+              type="button"
+              onClick={handleTgTest}
+              disabled={testingTg || !settings?.telegramChatId}
+              className="border border-gray-200 text-gray-700 rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              {testingTg ? 'Отправка...' : 'Отправить тест'}
+            </button>
+          </div>
         </form>
       </div>
 

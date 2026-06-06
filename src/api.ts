@@ -310,6 +310,10 @@ export function updateTelegramConfig(payload: { telegramBotToken?: string; teleg
   })
 }
 
+export function testTelegramConnection() {
+  return request<{ ok: boolean; error?: string }>('/client/settings/telegram-test', { method: 'POST' })
+}
+
 // ─── Dialogues ────────────────────────────────────────────────────────────────
 
 export interface DialogueSummary {

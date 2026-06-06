@@ -127,6 +127,31 @@ router.put('/settings/avito', async (req, res) => {
   }
 })
 
+router.post('/settings/telegram-test', async (req, res) => {
+  const { tenantId } = req.auth!
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId! } })
+  if (!tenant?.telegramBotToken || !tenant?.telegramChatId) {
+    res.json({ ok: false, error: 'Telegram не настроен' })
+    return
+  }
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${tenant.telegramBotToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: tenant.telegramChatId, text: '✅ AvitoBot подключён — уведомления работают!' }),
+      signal: AbortSignal.timeout(10_000),
+    })
+    if (!r.ok) {
+      const body = await r.text()
+      res.json({ ok: false, error: `Telegram API: ${r.status} ${body}` })
+      return
+    }
+    res.json({ ok: true })
+  } catch (err) {
+    res.json({ ok: false, error: err instanceof Error ? err.message : 'Ошибка' })
+  }
+})
+
 router.put('/settings/telegram', async (req, res) => {
   const { tenantId } = req.auth!
   const { telegramBotToken, telegramChatId } = req.body as {
