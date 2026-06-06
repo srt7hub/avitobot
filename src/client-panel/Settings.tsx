@@ -91,6 +91,7 @@ export default function SettingsPage() {
     setAvitoCheckResult(null)
     try {
       await updateAvitoConfig({ avitoClientId, avitoClientSecret, avitoUserId })
+      setSettings(s => s ? { ...s, avitoClientId, avitoClientSecret, avitoUserId } : s)
       setAvitoSaved(true)
     } catch (err: unknown) {
       setAvitoError(err instanceof Error ? err.message : 'Ошибка сохранения')
@@ -106,6 +107,7 @@ export default function SettingsPage() {
     setTgError('')
     try {
       await updateTelegramConfig({ telegramBotToken: tgBotToken, telegramChatId: tgChatId })
+      setSettings(s => s ? { ...s, telegramBotToken: tgBotToken, telegramChatId: tgChatId } : s)
       setTgSaved(true)
     } catch (err: unknown) {
       setTgError(err instanceof Error ? err.message : 'Ошибка сохранения')
