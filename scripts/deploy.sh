@@ -6,7 +6,7 @@ echo "Server: /var/www/avitobot"
 
 # 1. Pull latest code
 cd /var/www/avitobot
-git pull origin master
+git pull origin main
 
 # 2. Install dependencies
 npm ci --production=false
