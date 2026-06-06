@@ -242,7 +242,7 @@ export interface AvitoItem {
 export async function getItemsByUser(config: TenantAvitoConfig): Promise<AvitoItem[]> {
   return withToken(config, async (token, userId) => {
     const res = await fetch(
-      `${BASE_URL}/core/v1/items?per_page=50&page=1&status=active,old,blocked,rejected,removed,closed`,
+      `${BASE_URL}/core/v1/items?per_page=50&page=1`,
       { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }
     )
     if (!res.ok) {
