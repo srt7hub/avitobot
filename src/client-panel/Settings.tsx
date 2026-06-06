@@ -32,7 +32,9 @@ export default function SettingsPage() {
         setTelegramContact(data.telegramContact ?? '')
         setCustomPrompt(data.customPrompt ?? '')
         setAvitoClientId(data.avitoClientId ?? '')
+        setAvitoClientSecret(data.avitoClientSecret ?? '')
         setAvitoUserId(data.avitoUserId ?? '')
+        setTgBotToken(data.telegramBotToken ?? '')
         setTgChatId(data.telegramChatId ?? '')
       }
       setLoading(false)
@@ -81,7 +83,6 @@ export default function SettingsPage() {
     try {
       await updateTelegramConfig({ telegramBotToken: tgBotToken, telegramChatId: tgChatId })
       setTgSaved(true)
-      setTgBotToken('')
     } catch (err: unknown) {
       setTgError(err instanceof Error ? err.message : 'Ошибка сохранения')
     } finally {
@@ -148,16 +149,13 @@ export default function SettingsPage() {
         </p>
         <form onSubmit={handleTgSubmit} className="space-y-5 max-w-md">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Bot Token
-              {settings?.hasTelegramToken && <span className="ml-2 text-xs text-emerald-600">● сохранён</span>}
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Bot Token</label>
             <input
-              type="password"
+              type="text"
               value={tgBotToken}
               onChange={e => setTgBotToken(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder={settings?.hasTelegramToken ? 'оставьте пустым чтобы не менять' : '123456789:ABC...'}
+              placeholder="123456789:ABC..."
               autoComplete="off"
             />
           </div>
@@ -214,16 +212,13 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Client Secret
-              {settings?.hasAvitoSecret && <span className="ml-2 text-xs text-emerald-600">● сохранён</span>}
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
             <input
-              type="password"
+              type="text"
               value={avitoClientSecret}
               onChange={e => setAvitoClientSecret(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder={settings?.hasAvitoSecret ? 'оставьте пустым чтобы не менять' : '••••••••••••••••••••••••••••••••'}
+              placeholder="Client Secret"
               autoComplete="off"
             />
           </div>

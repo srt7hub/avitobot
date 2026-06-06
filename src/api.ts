@@ -277,8 +277,8 @@ export interface Settings {
   avitoClientId: string
   avitoUserId: string
   telegramChatId: string
-  hasTelegramToken: boolean
-  hasAvitoSecret: boolean
+  telegramBotToken: string
+  avitoClientSecret: string
 }
 
 export function fetchSettings() {
