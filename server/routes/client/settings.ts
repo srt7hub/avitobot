@@ -24,7 +24,6 @@ router.get('/settings', async (req, res) => {
       customPrompt: tenant.customPrompt ?? '',
       telegramContact: user.telegramContact,
       avitoClientId: avitoConfig?.avitoClientId ?? '',
-      avitoClientSecret: avitoConfig?.avitoClientSecret ?? '',
       avitoUserId: avitoConfig?.avitoUserId ?? '',
     })
   } catch (err) {

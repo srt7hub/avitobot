@@ -27,7 +27,6 @@ export default function SettingsPage() {
         setTelegramContact(data.telegramContact ?? '')
         setCustomPrompt(data.customPrompt ?? '')
         setAvitoClientId(data.avitoClientId ?? '')
-        setAvitoClientSecret(data.avitoClientSecret ?? '')
         setAvitoUserId(data.avitoUserId ?? '')
       }
       setLoading(false)

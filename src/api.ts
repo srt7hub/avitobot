@@ -275,7 +275,6 @@ export interface Settings {
   customPrompt: string
   telegramContact: string
   avitoClientId: string
-  avitoClientSecret: string
   avitoUserId: string
 }
 
