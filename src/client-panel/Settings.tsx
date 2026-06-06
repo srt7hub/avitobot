@@ -1,4 +1,28 @@
 import { useState, useEffect, FormEvent } from 'react'
+
+function PasswordField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="relative">
+      <input
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 pr-10 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      <button
+        type="button"
+        onClick={() => setShow(v => !v)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        tabIndex={-1}
+      >
+        {show ? '🙈' : '👁'}
+      </button>
+    </div>
+  )
+}
 import { fetchSettings, updateSettings, updateAvitoConfig, checkAvitoConnection, updateTelegramConfig, Settings } from '../api'
 
 export default function SettingsPage() {
@@ -150,14 +174,7 @@ export default function SettingsPage() {
         <form onSubmit={handleTgSubmit} className="space-y-5 max-w-md">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Bot Token</label>
-            <input
-              type="text"
-              value={tgBotToken}
-              onChange={e => setTgBotToken(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="123456789:ABC..."
-              autoComplete="off"
-            />
+            <PasswordField value={tgBotToken} onChange={setTgBotToken} placeholder="123456789:ABC..." />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Chat ID</label>
@@ -213,14 +230,7 @@ export default function SettingsPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
-            <input
-              type="text"
-              value={avitoClientSecret}
-              onChange={e => setAvitoClientSecret(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="Client Secret"
-              autoComplete="off"
-            />
+            <PasswordField value={avitoClientSecret} onChange={setAvitoClientSecret} placeholder="Client Secret" />
           </div>
 
           <div>
