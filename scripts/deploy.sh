@@ -21,7 +21,7 @@ npx prisma generate
 npm run build
 
 # 6. Restart PM2 (zero-downtime: reload не restart)
-pm2 reload ecosystem.config.js --update-env
+pm2 reload ecosystem.config.cjs --update-env
 
 echo "=== Deploy complete ==="
 pm2 status
