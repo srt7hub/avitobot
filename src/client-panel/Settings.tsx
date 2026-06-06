@@ -114,36 +114,7 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <h2 className="text-lg font-semibold text-gray-900">Настройки</h2>
 
-      {/* Общие настройки */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Общие</h3>
-        <form onSubmit={handleSubmit} className="space-y-5 max-w-md">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Имя бота</label>
-            <input
-              type="text"
-              value={botName}
-              onChange={e => setBotName(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="Менеджер"
-            />
-            <p className="text-xs text-gray-400 mt-1">Как бот представляется гостям</p>
-          </div>
-
-{error && <p className="text-sm text-red-500">{error}</p>}
-          {saved && <p className="text-sm text-emerald-600">Настройки сохранены</p>}
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
-          >
-            {saving ? 'Сохранение...' : 'Сохранить изменения'}
-          </button>
-        </form>
-      </div>
-
-      {/* Системный промпт */}
+{/* Системный промпт */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h3 className="text-sm font-semibold text-gray-700 mb-1">Инструкция для бота</h3>
         <p className="text-xs text-gray-400 mb-4">
