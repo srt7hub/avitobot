@@ -140,9 +140,16 @@ export default function FaqManager() {
           className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 bg-white"
         >
           <option value="">Все объекты</option>
-          {listings.map(l => (
-            <option key={l.propertyId} value={l.propertyId}>{l.title}</option>
-          ))}
+          <optgroup label="Общее">
+            <option value="__global__">Глобальные (для всех)</option>
+          </optgroup>
+          {listings.length > 0 && (
+            <optgroup label="По квартирам">
+              {listings.map(l => (
+                <option key={l.propertyId} value={l.propertyId}>{l.title}</option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </div>
 
