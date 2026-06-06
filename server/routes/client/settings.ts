@@ -26,6 +26,8 @@ router.get('/settings', async (req, res) => {
       avitoClientId: avitoConfig?.avitoClientId ?? '',
       avitoUserId: avitoConfig?.avitoUserId ?? '',
       telegramChatId: tenant.telegramChatId ?? '',
+      hasTelegramToken: !!tenant.telegramBotToken,
+      hasAvitoSecret: !!avitoConfig?.avitoClientSecret,
     })
   } catch (err) {
     console.error('[settings GET] error:', err)

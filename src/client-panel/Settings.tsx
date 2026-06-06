@@ -148,13 +148,16 @@ export default function SettingsPage() {
         </p>
         <form onSubmit={handleTgSubmit} className="space-y-5 max-w-md">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Bot Token</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Bot Token
+              {settings?.hasTelegramToken && <span className="ml-2 text-xs text-emerald-600">● сохранён</span>}
+            </label>
             <input
               type="password"
               value={tgBotToken}
               onChange={e => setTgBotToken(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder={settings?.telegramChatId ? '••••••••••••••••••••••• (оставьте пустым чтобы не менять)' : '123456789:ABC...'}
+              placeholder={settings?.hasTelegramToken ? 'оставьте пустым чтобы не менять' : '123456789:ABC...'}
               autoComplete="off"
             />
           </div>
@@ -211,13 +214,16 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client Secret</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Client Secret
+              {settings?.hasAvitoSecret && <span className="ml-2 text-xs text-emerald-600">● сохранён</span>}
+            </label>
             <input
               type="password"
               value={avitoClientSecret}
               onChange={e => setAvitoClientSecret(e.target.value)}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="••••••••••••••••••••••••••••••••"
+              placeholder={settings?.hasAvitoSecret ? 'оставьте пустым чтобы не менять' : '••••••••••••••••••••••••••••••••'}
               autoComplete="off"
             />
           </div>
