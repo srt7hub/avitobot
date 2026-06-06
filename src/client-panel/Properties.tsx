@@ -15,7 +15,7 @@ function statusLabel(status: string) {
 
 function AvitoItemCard({ item }: { item: AvitoItem }) {
   const [imgIdx, setImgIdx] = useState(0)
-  const images = item.images
+  const images = (item.images ?? [])
     .map(img => img['640x480'] || img['208x156'] || img['1280x960'])
     .filter(Boolean) as string[]
   const status = statusLabel(item.status)
@@ -44,13 +44,13 @@ function AvitoItemCard({ item }: { item: AvitoItem }) {
           {images.length > 1 && (
             <>
               <button
-                onClick={() => setImgIdx(i => Math.max(0, i - 1))}
+                onClick={() => setImgIdx(n => Math.max(0, n - 1))}
                 className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs transition-colors"
               >
                 ‹
               </button>
               <button
-                onClick={() => setImgIdx(i => Math.min(images.length - 1, i + 1))}
+                onClick={() => setImgIdx(n => Math.min(images.length - 1, n + 1))}
                 className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs transition-colors"
               >
                 ›
