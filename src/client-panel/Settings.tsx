@@ -130,19 +130,7 @@ export default function SettingsPage() {
             <p className="text-xs text-gray-400 mt-1">Как бот представляется гостям</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Telegram для алертов</label>
-            <input
-              type="text"
-              value={telegramContact}
-              onChange={e => setTelegramContact(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              placeholder="@username"
-            />
-            <p className="text-xs text-gray-400 mt-1">Куда приходит уведомление при запросе оператора</p>
-          </div>
-
-          {error && <p className="text-sm text-red-500">{error}</p>}
+{error && <p className="text-sm text-red-500">{error}</p>}
           {saved && <p className="text-sm text-emerald-600">Настройки сохранены</p>}
 
           <button
