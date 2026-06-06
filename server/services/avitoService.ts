@@ -78,7 +78,7 @@ async function fetchNewToken(config: TenantAvitoConfig): Promise<AvitoTokenState
           client_id: clientId,
           client_secret: clientSecret,
           refresh_token: refreshToken,
-          scope: 'messenger:read messenger:write',
+          scope: 'messenger:read messenger:write items:info',
         }),
       })
       if (res.ok) {
@@ -104,7 +104,7 @@ async function fetchNewToken(config: TenantAvitoConfig): Promise<AvitoTokenState
       grant_type: 'client_credentials',
       client_id: clientId,
       client_secret: clientSecret,
-      scope: 'messenger:read messenger:write',
+      scope: 'messenger:read messenger:write items:info',
     }),
   })
 
@@ -226,5 +226,30 @@ export async function markAsRead(config: TenantAvitoConfig, chatId: string): Pro
       const body = await res.text()
       throw new Error(`[avitoService][${config.tenantId}] markAsRead failed: ${res.status} ${body}`)
     }
+  })
+}
+
+export interface AvitoItem {
+  id: number
+  title: string
+  price: number | null
+  address: { city?: string; metro?: string; district?: string } | null
+  images: Array<{ '208x156'?: string; '640x480'?: string; '1280x960'?: string }>
+  status: string
+  url: string
+}
+
+export async function getItemsByUser(config: TenantAvitoConfig): Promise<AvitoItem[]> {
+  return withToken(config, async (token, userId) => {
+    const res = await fetch(
+      `${BASE_URL}/core/v1/accounts/${userId}/items?per_page=50&page=1`,
+      { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }
+    )
+    if (!res.ok) {
+      const body = await res.text()
+      throw new Error(`[avitoService][${config.tenantId}] getItemsByUser failed: ${res.status} ${body}`)
+    }
+    const data = await res.json() as { resources: AvitoItem[] }
+    return data.resources || []
   })
 }

@@ -1,8 +1,27 @@
 import { Router } from 'express'
 import prisma from '../../prisma.js'
 import { sendOpsAlert } from '../../services/telegramService.js'
+import { getItemsByUser, TenantAvitoConfig } from '../../services/avitoService.js'
 
 const router = Router()
+
+router.get('/properties/avito-data', async (req, res) => {
+  const tenantId = req.auth!.tenantId!
+
+  try {
+    const avitoConfig = await prisma.tenantAvitoConfig.findUnique({ where: { tenantId } })
+    if (!avitoConfig?.accessToken) {
+      res.json({ items: [] })
+      return
+    }
+
+    const items = await getItemsByUser(avitoConfig as TenantAvitoConfig)
+    res.json({ items })
+  } catch (err) {
+    console.error('[properties/avito-data GET] error:', err)
+    res.status(500).json({ error: 'Не удалось загрузить данные с Авито' })
+  }
+})
 
 router.get('/properties', async (req, res) => {
   const tenantId = req.auth!.tenantId!

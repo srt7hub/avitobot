@@ -151,6 +151,20 @@ export function updateProperty(
   })
 }
 
+export interface AvitoItem {
+  id: number
+  title: string
+  price: number | null
+  address: { city?: string; metro?: string; district?: string } | null
+  images: Array<{ '208x156'?: string; '640x480'?: string; '1280x960'?: string }>
+  status: string
+  url: string
+}
+
+export function fetchAvitoItems() {
+  return request<{ items: AvitoItem[] }>('/client/properties/avito-data')
+}
+
 // ─── OPS API ──────────────────────────────────────────────────────────────────
 
 export interface OpsClientSummary {
