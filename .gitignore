@@ -7,3 +7,4 @@ dist/
 prisma/dev.db
 prisma/production.db
 *.log
+.DS_Store
