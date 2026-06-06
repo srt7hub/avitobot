@@ -239,17 +239,22 @@ export interface AvitoItem {
   url: string
 }
 
+async function fetchItemsByStatus(token: string, status: string): Promise<AvitoItem[]> {
+  const res = await fetch(
+    `${BASE_URL}/core/v1/items?per_page=50&page=1&status=${status}`,
+    { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }
+  )
+  if (!res.ok) return []
+  const data = await res.json() as { resources: AvitoItem[] }
+  return data.resources || []
+}
+
 export async function getItemsByUser(config: TenantAvitoConfig): Promise<AvitoItem[]> {
-  return withToken(config, async (token, userId) => {
-    const res = await fetch(
-      `${BASE_URL}/core/v1/items?per_page=50&page=1`,
-      { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }
-    )
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(`[avitoService][${config.tenantId}] getItemsByUser failed: ${res.status} ${body}`)
-    }
-    const data = await res.json() as { resources: AvitoItem[] }
-    return data.resources || []
+  return withToken(config, async (token) => {
+    const [active, old] = await Promise.all([
+      fetchItemsByStatus(token, 'active'),
+      fetchItemsByStatus(token, 'old'),
+    ])
+    return [...active, ...old]
   })
 }
