@@ -27,7 +27,7 @@ function getClientPage(): ClientPage {
 const CLIENT_NAV: { id: ClientPage; label: string }[] = [
   { id: 'dashboard', label: 'Дашборд' },
   { id: 'faq', label: 'База знаний' },
-  { id: 'properties', label: 'Объекты' },
+  { id: 'properties', label: 'Объявления' },
   { id: 'dialogues', label: 'Диалоги' },
   { id: 'settings', label: 'Настройки' },
 ]
