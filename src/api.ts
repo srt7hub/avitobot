@@ -272,6 +272,7 @@ export function opsGetMessages(tenantId: string, dialogueId: string) {
 
 export interface Settings {
   botName: string
+  customPrompt: string
   telegramContact: string
   avitoClientId: string
   avitoClientSecret: string
@@ -282,7 +283,7 @@ export function fetchSettings() {
   return request<Settings>('/client/settings')
 }
 
-export function updateSettings(payload: { botName?: string; telegramContact?: string }) {
+export function updateSettings(payload: { botName?: string; telegramContact?: string; customPrompt?: string }) {
   return request('/client/settings', {
     method: 'PUT',
     body: JSON.stringify(payload),
@@ -294,4 +295,56 @@ export function updateAvitoConfig(payload: { avitoClientId: string; avitoClientS
     method: 'PUT',
     body: JSON.stringify(payload),
   })
+}
+
+export function checkAvitoConnection() {
+  return request<{ ok: boolean; error?: string }>('/client/settings/avito-check')
+}
+
+// ─── Dialogues ────────────────────────────────────────────────────────────────
+
+export interface DialogueSummary {
+  id: string
+  guestName: string
+  avitoChatId: string
+  propertyName: string | null
+  messageCount: number
+  lastMessageAt: string | null
+  isHumanTakeover: boolean
+  lastMessage: { role: string; content: string } | null
+  updatedAt: string
+}
+
+export interface DialogueMessage {
+  id: string
+  role: 'GUEST' | 'BOT'
+  content: string
+  processedAt: string
+}
+
+export interface DialogueFull {
+  id: string
+  guestName: string
+  avitoChatId: string
+  propertyName: string | null
+  messageCount: number
+  lastMessageAt: string | null
+  isHumanTakeover: boolean
+  createdAt: string
+  messages: DialogueMessage[]
+}
+
+export interface DialoguesPage {
+  total: number
+  page: number
+  pages: number
+  dialogues: DialogueSummary[]
+}
+
+export function fetchDialogues(page = 1) {
+  return request<DialoguesPage>(`/client/dialogues?page=${page}`)
+}
+
+export function fetchDialogue(id: string) {
+  return request<DialogueFull>(`/client/dialogues/${id}`)
 }

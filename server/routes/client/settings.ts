@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import prisma from '../../prisma.js'
+import { refreshTokenIfNeeded } from '../../services/avitoService.js'
 
 const router = Router()
 
@@ -20,6 +21,7 @@ router.get('/settings', async (req, res) => {
 
     res.json({
       botName: tenant.botName,
+      customPrompt: tenant.customPrompt ?? '',
       telegramContact: user.telegramContact,
       avitoClientId: avitoConfig?.avitoClientId ?? '',
       avitoClientSecret: avitoConfig?.avitoClientSecret ?? '',
@@ -33,15 +35,22 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   const { tenantId, userId } = req.auth!
-  const { botName, telegramContact } = req.body as {
+  const { botName, telegramContact, customPrompt } = req.body as {
     botName?: string
     telegramContact?: string
+    customPrompt?: string
   }
 
   try {
     await Promise.all([
-      botName !== undefined
-        ? prisma.tenant.update({ where: { id: tenantId! }, data: { botName: botName.trim() } })
+      (botName !== undefined || customPrompt !== undefined)
+        ? prisma.tenant.update({
+            where: { id: tenantId! },
+            data: {
+              ...(botName !== undefined && { botName: botName.trim() }),
+              ...(customPrompt !== undefined && { customPrompt: customPrompt.trim() || null }),
+            },
+          })
         : Promise.resolve(),
       telegramContact !== undefined
         ? prisma.tenantUser.update({ where: { id: userId }, data: { telegramContact: telegramContact.trim() } })
@@ -52,6 +61,36 @@ router.put('/settings', async (req, res) => {
   } catch (err) {
     console.error('[settings PUT] error:', err)
     res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+router.get('/settings/avito-check', async (req, res) => {
+  const { tenantId } = req.auth!
+
+  try {
+    const avitoConfig = await prisma.tenantAvitoConfig.findUnique({ where: { tenantId: tenantId! } })
+
+    if (!avitoConfig || !avitoConfig.avitoClientId || !avitoConfig.avitoClientSecret || !avitoConfig.avitoUserId) {
+      res.json({ ok: false, error: 'Ключи не заданы' })
+      return
+    }
+
+    await refreshTokenIfNeeded({
+      id: avitoConfig.id,
+      tenantId: tenantId!,
+      avitoClientId: avitoConfig.avitoClientId,
+      avitoClientSecret: avitoConfig.avitoClientSecret,
+      avitoUserId: avitoConfig.avitoUserId,
+      accessToken: avitoConfig.accessToken,
+      refreshToken: avitoConfig.refreshToken,
+      tokenExpiresAt: avitoConfig.tokenExpiresAt,
+      pollingEnabled: avitoConfig.pollingEnabled,
+    })
+
+    res.json({ ok: true })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Ошибка подключения'
+    res.json({ ok: false, error: msg })
   }
 })
 

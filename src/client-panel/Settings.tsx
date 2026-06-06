@@ -1,16 +1,19 @@
 import { useState, useEffect, FormEvent } from 'react'
-import { fetchSettings, updateSettings, updateAvitoConfig, Settings } from '../api'
+import { fetchSettings, updateSettings, updateAvitoConfig, checkAvitoConnection, Settings } from '../api'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null)
   const [botName, setBotName] = useState('')
   const [telegramContact, setTelegramContact] = useState('')
+  const [customPrompt, setCustomPrompt] = useState('')
   const [avitoClientId, setAvitoClientId] = useState('')
   const [avitoClientSecret, setAvitoClientSecret] = useState('')
   const [avitoUserId, setAvitoUserId] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savingAvito, setSavingAvito] = useState(false)
+  const [checkingAvito, setCheckingAvito] = useState(false)
+  const [avitoCheckResult, setAvitoCheckResult] = useState<{ ok: boolean; error?: string } | null>(null)
   const [error, setError] = useState('')
   const [avitoError, setAvitoError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -22,6 +25,7 @@ export default function SettingsPage() {
         setSettings(data)
         setBotName(data.botName ?? '')
         setTelegramContact(data.telegramContact ?? '')
+        setCustomPrompt(data.customPrompt ?? '')
         setAvitoClientId(data.avitoClientId ?? '')
         setAvitoClientSecret(data.avitoClientSecret ?? '')
         setAvitoUserId(data.avitoUserId ?? '')
@@ -39,7 +43,7 @@ export default function SettingsPage() {
     setSaved(false)
     setError('')
     try {
-      await updateSettings({ botName, telegramContact })
+      await updateSettings({ botName, telegramContact, customPrompt })
       setSaved(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ошибка сохранения')
@@ -53,6 +57,7 @@ export default function SettingsPage() {
     setSavingAvito(true)
     setAvitoSaved(false)
     setAvitoError('')
+    setAvitoCheckResult(null)
     try {
       await updateAvitoConfig({ avitoClientId, avitoClientSecret, avitoUserId })
       setAvitoSaved(true)
@@ -63,18 +68,23 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleCheckAvito() {
+    setCheckingAvito(true)
+    setAvitoCheckResult(null)
+    try {
+      const result = await checkAvitoConnection()
+      setAvitoCheckResult(result ?? { ok: false, error: 'Нет ответа' })
+    } catch {
+      setAvitoCheckResult({ ok: false, error: 'Ошибка подключения' })
+    } finally {
+      setCheckingAvito(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
         <p className="text-sm text-gray-400">Загрузка...</p>
-      </div>
-    )
-  }
-
-  if (!settings && error) {
-    return (
-      <div className="flex items-center justify-center h-40">
-        <p className="text-sm text-red-500">{error}</p>
       </div>
     )
   }
@@ -120,6 +130,31 @@ export default function SettingsPage() {
             className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
           >
             {saving ? 'Сохранение...' : 'Сохранить изменения'}
+          </button>
+        </form>
+      </div>
+
+      {/* Системный промпт */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-1">Инструкция для бота</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Дополнительный контекст для AI — правила общения, тон, особые инструкции. Если пусто, бот работает по умолчанию.
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
+          <textarea
+            value={customPrompt}
+            onChange={e => setCustomPrompt(e.target.value)}
+            rows={6}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 resize-y font-mono"
+            placeholder={`Пример:\nОтвечай вежливо и кратко. Если гость спрашивает про цену — уточни даты заезда. Не обсуждай скидки без согласования с хозяином.`}
+          />
+          {saved && <p className="text-sm text-emerald-600">Настройки сохранены</p>}
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          >
+            {saving ? 'Сохранение...' : 'Сохранить инструкцию'}
           </button>
         </form>
       </div>
@@ -180,13 +215,29 @@ export default function SettingsPage() {
           {avitoError && <p className="text-sm text-red-500">{avitoError}</p>}
           {avitoSaved && <p className="text-sm text-emerald-600">OAuth-ключи сохранены</p>}
 
-          <button
-            type="submit"
-            disabled={savingAvito}
-            className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
-          >
-            {savingAvito ? 'Сохранение...' : 'Сохранить ключи'}
-          </button>
+          {avitoCheckResult && (
+            <div className={`rounded-lg px-4 py-3 text-sm ${avitoCheckResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+              {avitoCheckResult.ok ? '✓ Подключение успешно — Avito API отвечает' : `✗ Ошибка: ${avitoCheckResult.error}`}
+            </div>
+          )}
+
+          <div className="flex gap-3 flex-wrap">
+            <button
+              type="submit"
+              disabled={savingAvito}
+              className="bg-gray-900 text-white rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              {savingAvito ? 'Сохранение...' : 'Сохранить ключи'}
+            </button>
+            <button
+              type="button"
+              onClick={handleCheckAvito}
+              disabled={checkingAvito}
+              className="border border-gray-200 text-gray-700 rounded-lg px-6 py-2 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              {checkingAvito ? 'Проверка...' : 'Проверить подключение'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

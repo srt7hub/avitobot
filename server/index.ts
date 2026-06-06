@@ -9,6 +9,7 @@ import dashboardRoutes from './routes/client/dashboard.js'
 import faqRoutes from './routes/client/faq.js'
 import propertiesRoutes from './routes/client/properties.js'
 import settingsRoutes from './routes/client/settings.js'
+import dialoguesRoutes from './routes/client/dialogues.js'
 import clientsRoutes from './routes/ops/clients.js'
 import avitoRoutes from './routes/ops/avito.js'
 import contentRoutes from './routes/ops/content.js'
@@ -43,6 +44,7 @@ app.use('/api/client', authMiddleware, clientOnly, dashboardRoutes)
 app.use('/api/client', authMiddleware, clientOnly, faqRoutes)
 app.use('/api/client', authMiddleware, clientOnly, propertiesRoutes)
 app.use('/api/client', authMiddleware, clientOnly, settingsRoutes)
+app.use('/api/client', authMiddleware, clientOnly, dialoguesRoutes)
 
 app.use('/api/ops', authMiddleware, opsOnly, clientsRoutes)
 app.use('/api/ops', authMiddleware, opsOnly, avitoRoutes)
