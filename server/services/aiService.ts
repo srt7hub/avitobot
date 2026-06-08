@@ -121,8 +121,12 @@ async function createPrediction(
     body: JSON.stringify({
       input: {
         prompt: fullPrompt,
+        // gemini-3-flash — reasoning-модель: часть бюджета вывода уходит на
+        // скрытые "мысли" (thought_signature). При низком лимите видимый текст
+        // обрывается на полуслове. 1024 хватает на reasoning + полный ответ
+        // (значение проверено и совпадает с рабочим SmartApart).
         system_instruction: systemPrompt,
-        max_output_tokens: 256,
+        max_output_tokens: 1024,
         temperature: 0.4,
       },
     }),
