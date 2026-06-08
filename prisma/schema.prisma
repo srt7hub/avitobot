@@ -72,6 +72,10 @@ model TenantAvitoConfig {
   tokenExpiresAt    DateTime?
   lastPolledAt      DateTime?
   pollingEnabled    Boolean   @default(true)
+  // Предохранитель первого запуска: бот отвечает ТОЛЬКО на сообщения,
+  // пришедшие после этого момента. Ставится один раз при первом поллинге
+  // тенанта, чтобы не разослать ответы на накопившийся бэклог.
+  pollingStartedAt  DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

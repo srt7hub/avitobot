@@ -5,7 +5,6 @@ import { sanitizeAiResponse } from './services/responseFilter.js'
 import {
   getOrCreateDialogue,
   updateDialogue,
-  isMessageProcessed,
   markMessageProcessed,
   isPaused,
   pauseDialogue,
@@ -37,17 +36,16 @@ async function processMessage(
 
   if (!msgText.trim()) return
 
-  // Deduplication
-  if (await isMessageProcessed(avitoMsgId)) return
-
   // Get or create dialogue
   const property = await prisma.property.findFirst({
     where: { tenantId, avitoItemId: chat.item_id, isActive: true },
   })
   const dialogue = await getOrCreateDialogue(tenantId, avitoChatId, property?.id)
 
-  // Mark guest message as processed
-  await markMessageProcessed(dialogue.id, avitoMsgId, 'GUEST', msgText)
+  // Атомарный дедуп: попытка создать запись сообщения служит замком.
+  // Если false — это сообщение уже обрабатывается/обработано, выходим.
+  const isNew = await markMessageProcessed(dialogue.id, avitoMsgId, 'GUEST', msgText)
+  if (!isNew) return
   await updateDialogue(avitoChatId, tenantId, {
     messageCount: dialogue.messageCount + 1,
     lastMessageAt: new Date(),
@@ -64,11 +62,23 @@ async function processMessage(
     refreshToken: config.refreshToken,
     tokenExpiresAt: config.tokenExpiresAt,
     pollingEnabled: config.pollingEnabled,
+    pollingStartedAt: config.pollingStartedAt,
+  }
+
+  // Предохранитель: НЕ отвечаем на сообщения, пришедшие до момента запуска
+  // поллинга для этого тенанта (бэклог накопившихся непрочитанных чатов).
+  // message.created — unix-время в секундах.
+  const cutoff = config.pollingStartedAt
+  if (cutoff && message.created && message.created * 1000 < cutoff.getTime()) {
+    await markAsRead(avitoConfig, avitoChatId)
+    console.log(`[bot][${tenantId}] Skip pre-cutoff message in chat ${avitoChatId} (created ${new Date(message.created * 1000).toISOString()})`)
+    return
   }
 
   // Human Takeover check
   if (isOperatorRequest(msgText)) {
     await sendMessage(avitoConfig, avitoChatId, HUMAN_TAKEOVER_REPLY)
+    await markAsRead(avitoConfig, avitoChatId)
 
     const botMsgId = `bot-takeover-${Date.now()}`
     await markMessageProcessed(dialogue.id, botMsgId, 'BOT', HUMAN_TAKEOVER_REPLY)
@@ -94,7 +104,11 @@ async function processMessage(
   }
 
   // Check if paused (human takeover active)
-  if (await isPaused(avitoChatId, tenantId)) return
+  if (await isPaused(avitoChatId, tenantId)) {
+    // Помечаем прочитанным, чтобы пауза не держала чат в unread бесконечно
+    await markAsRead(avitoConfig, avitoChatId)
+    return
+  }
 
   // Build chat history for AI
   const recentMsgs = await getRecentMessages(avitoChatId, tenantId, 10)
@@ -152,6 +166,18 @@ async function processMessage(
 async function processTenant(config: PrismaTenantAvitoConfig & { tenant: Tenant }): Promise<void> {
   const { tenantId } = config
 
+  // Предохранитель первого запуска: фиксируем момент старта поллинга один раз.
+  // Все сообщения старше этого момента будут проигнорированы (см. processMessage).
+  if (!config.pollingStartedAt) {
+    const now = new Date()
+    await prisma.tenantAvitoConfig.update({
+      where: { tenantId },
+      data: { pollingStartedAt: now },
+    })
+    config.pollingStartedAt = now
+    console.log(`[bot][${tenantId}] First poll — cutoff set to ${now.toISOString()}, backlog will be skipped`)
+  }
+
   const avitoConfig: TenantAvitoConfig = {
     id: config.id,
     tenantId: config.tenantId,
@@ -162,6 +188,7 @@ async function processTenant(config: PrismaTenantAvitoConfig & { tenant: Tenant 
     refreshToken: config.refreshToken,
     tokenExpiresAt: config.tokenExpiresAt,
     pollingEnabled: config.pollingEnabled,
+    pollingStartedAt: config.pollingStartedAt,
   }
 
   try {
@@ -217,13 +244,34 @@ async function pollAllTenants(): Promise<void> {
   }
 }
 
+const POLL_INTERVAL_MS = 30_000
+let isPolling = false
+let stopped = false
+let pollTimer: NodeJS.Timeout | null = null
+
+// Самопланирующийся цикл: следующий поллинг стартует только после завершения
+// текущего, что исключает наложение циклов и двойную обработку сообщений.
+async function pollLoop(): Promise<void> {
+  if (stopped) return
+  if (isPolling) return
+  isPolling = true
+  try {
+    await pollAllTenants()
+  } catch (err) {
+    console.error('[bot] pollLoop error:', err)
+  } finally {
+    isPolling = false
+    if (!stopped) pollTimer = setTimeout(pollLoop, POLL_INTERVAL_MS)
+  }
+}
+
 console.log('[bot] AvitoBot started, polling every 30s')
-pollAllTenants()
-const pollingTimer = setInterval(pollAllTenants, 30_000)
+pollLoop()
 
 process.on('SIGTERM', async () => {
   console.log('[bot] SIGTERM received, shutting down gracefully...')
-  clearInterval(pollingTimer)
+  stopped = true
+  if (pollTimer) clearTimeout(pollTimer)
   await prisma.$disconnect()
   process.exit(0)
 })

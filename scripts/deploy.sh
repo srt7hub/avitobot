@@ -4,6 +4,9 @@ set -e
 echo "=== AvitoBot Deploy ==="
 echo "Server: /var/www/avitobot"
 
+# 0. Директории для логов/бэкапов (нужны для ecosystem.config.cjs)
+mkdir -p /var/log/avitobot /var/backups/avitobot
+
 # 1. Pull latest code
 cd /var/www/avitobot
 git pull origin main

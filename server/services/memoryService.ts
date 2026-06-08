@@ -29,15 +29,28 @@ export async function isMessageProcessed(avitoMsgId: string): Promise<boolean> {
   return msg !== null
 }
 
+/**
+ * Атомарно регистрирует сообщение как обработанное.
+ * Возвращает true, если запись создана впервые, и false, если такое
+ * avitoMsgId уже существует (unique-конфликт) — это служит замком против
+ * параллельной/повторной обработки одного и того же сообщения.
+ */
 export async function markMessageProcessed(
   dialogueId: string,
   avitoMsgId: string,
   role: 'GUEST' | 'BOT',
   content: string
-): Promise<void> {
-  await prisma.message.create({
-    data: { dialogueId, avitoMsgId, role, content },
-  })
+): Promise<boolean> {
+  try {
+    await prisma.message.create({
+      data: { dialogueId, avitoMsgId, role, content },
+    })
+    return true
+  } catch (err) {
+    // P2002 = unique constraint violation на avitoMsgId → уже обработано
+    if ((err as { code?: string }).code === 'P2002') return false
+    throw err
+  }
 }
 
 export async function isPaused(avitoChatId: string, tenantId: string): Promise<boolean> {

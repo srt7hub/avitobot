@@ -8,6 +8,11 @@ module.exports = {
       restart_delay: 3000,
       kill_timeout: 30000,
       watch: false,
+      // Логи в файлы с временными метками — переживают рестарты PM2
+      error_file: '/var/log/avitobot/api-error.log',
+      out_file: '/var/log/avitobot/api-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
       env: {
         NODE_ENV: 'production',
         API_PORT: '3010'
@@ -19,7 +24,13 @@ module.exports = {
       interpreter: 'tsx',
       instances: 1,        // СТРОГО 1 — иначе dedup сломается
       kill_timeout: 30000,
+      restart_delay: 5000,
+      max_restarts: 10,    // при краш-лупе PM2 остановит и поднимет OPS-алерт через мониторинг
       watch: false,
+      error_file: '/var/log/avitobot/bot-error.log',
+      out_file: '/var/log/avitobot/bot-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
       env: {
         NODE_ENV: 'production'
       }

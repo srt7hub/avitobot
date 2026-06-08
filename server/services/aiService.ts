@@ -100,20 +100,17 @@ async function pollPrediction(predictionId: string, token: string): Promise<stri
   throw new Error(`[aiService] Prediction ${predictionId} timed out`)
 }
 
-export async function generateReply(
-  chatHistory: { role: 'user' | 'assistant'; content: string }[],
-  systemPrompt: string
+const MAX_AI_RETRIES = 3
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(r => setTimeout(r, ms))
+}
+
+async function createPrediction(
+  fullPrompt: string,
+  systemPrompt: string,
+  token: string
 ): Promise<string> {
-  const token = process.env.REPLICATE_API_TOKEN
-  if (!token) throw new Error('[aiService] REPLICATE_API_TOKEN is not set')
-
-  let fullPrompt = ''
-  for (const msg of chatHistory) {
-    const roleName = msg.role === 'user' ? 'Client' : 'Assistant'
-    fullPrompt += `${roleName}: ${msg.content}\n\n`
-  }
-  fullPrompt += 'Assistant:'
-
   const res = await fetch(REPLICATE_API_URL, {
     method: 'POST',
     headers: {
@@ -136,9 +133,11 @@ export async function generateReply(
     if (res.status === 429) {
       let retryAfter = 10
       try { retryAfter = (JSON.parse(body) as { retry_after?: number }).retry_after ?? 10 } catch { /* ignore */ }
-      throw Object.assign(new Error(`[aiService] Rate limited (429). retry_after=${retryAfter}s`), { retryAfter })
+      throw Object.assign(new Error(`[aiService] Rate limited (429). retry_after=${retryAfter}s`), { retryAfter, retryable: true })
     }
-    throw new Error(`[aiService] createPrediction failed: ${res.status} ${body}`)
+    // 5xx — временные ошибки сервера, имеет смысл повторить
+    const retryable = res.status >= 500
+    throw Object.assign(new Error(`[aiService] createPrediction failed: ${res.status} ${body}`), { retryable })
   }
 
   const prediction = await res.json() as ReplicatePrediction
@@ -154,4 +153,40 @@ export async function generateReply(
   }
 
   return pollPrediction(prediction.id, token)
+}
+
+export async function generateReply(
+  chatHistory: { role: 'user' | 'assistant'; content: string }[],
+  systemPrompt: string
+): Promise<string> {
+  const token = process.env.REPLICATE_API_TOKEN
+  if (!token) throw new Error('[aiService] REPLICATE_API_TOKEN is not set')
+
+  let fullPrompt = ''
+  for (const msg of chatHistory) {
+    const roleName = msg.role === 'user' ? 'Client' : 'Assistant'
+    fullPrompt += `${roleName}: ${msg.content}\n\n`
+  }
+  fullPrompt += 'Assistant:'
+
+  let lastErr: unknown
+  for (let attempt = 1; attempt <= MAX_AI_RETRIES; attempt++) {
+    try {
+      return await createPrediction(fullPrompt, systemPrompt, token)
+    } catch (err) {
+      lastErr = err
+      const retryable = Boolean((err as { retryable?: boolean }).retryable)
+      if (!retryable || attempt === MAX_AI_RETRIES) break
+
+      // backoff: для 429 уважаем retry_after, иначе экспоненциальный с потолком 20с
+      const retryAfter = (err as { retryAfter?: number }).retryAfter
+      const delayMs = retryAfter != null
+        ? retryAfter * 1000
+        : Math.min(2_000 * 2 ** (attempt - 1), 20_000)
+      console.warn(`[aiService] attempt ${attempt}/${MAX_AI_RETRIES} failed, retrying in ${delayMs}ms:`, (err as Error).message)
+      await sleep(delayMs)
+    }
+  }
+
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
 }

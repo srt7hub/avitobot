@@ -36,6 +36,7 @@ export interface TenantAvitoConfig {
   refreshToken: string
   tokenExpiresAt: Date | null
   pollingEnabled: boolean
+  pollingStartedAt?: Date | null
 }
 
 // Per-tenant in-memory token cache (accessToken + expiresAt)
