@@ -14,6 +14,7 @@ import {
 } from './services/memoryService.js'
 import { getFaqForProperty } from './services/faqService.js'
 import { sendHumanTakeoverAlert, sendDialogueNotification, sendUnknownAnswerAlert, sendOpsAlert } from './services/telegramService.js'
+import { maskPii } from './services/piiService.js'
 import { isPaymentStatusIntent, isSmsIntent, isAckIntent } from './constants/intents.js'
 import type { AvitoChat, AvitoMessage } from './services/avitoService.js'
 import type { TenantAvitoConfig as PrismaTenantAvitoConfig, Tenant } from '@prisma/client'
@@ -114,6 +115,12 @@ async function processMessage(
 
   if (!msgText.trim()) return
 
+  // ПДн-защита: маскируем телефоны/email гостя ОДИН раз. Маскированную версию
+  // используем для всего, что покидает рантайм (хранение в БД, пересылка в
+  // Telegram, история для AI). Сырой msgText — только для pattern-матчинга
+  // интентов, где ПДн не влияют на результат. См. [[piiService]].
+  const maskedText = maskPii(msgText)
+
   const property = await prisma.property.findFirst({
     where: { tenantId, avitoItemId: chat.item_id, isActive: true },
   })
@@ -130,7 +137,7 @@ async function processMessage(
     const dialogue = await getOrCreateDialogue(tenantId, avitoChatId, property?.id)
 
     // Дедуп: помечаем системное сообщение обработанным (замок от повторов)
-    const isNewSys = await markMessageProcessed(dialogue.id, avitoMsgId, 'GUEST', msgText)
+    const isNewSys = await markMessageProcessed(dialogue.id, avitoMsgId, 'GUEST', maskedText)
     if (!isNewSys) return
 
     // Guard: приветствие уже отправлялось — не дублируем (рестарт/повторное обнаружение)
@@ -180,7 +187,7 @@ async function processMessage(
 
   // Игнорируем служебные/не-текстовые сообщения (удаление, картинки, голос и т.п.)
   if (isServiceMessage(message, msgText)) {
-    console.log(`[bot][${tenantId}] Skip service message in chat ${avitoChatId}: "${msgText.slice(0, 40)}"`)
+    console.log(`[bot][${tenantId}] Skip service message in chat ${avitoChatId}: "${maskedText.slice(0, 40)}"`)
     return
   }
 
@@ -189,7 +196,7 @@ async function processMessage(
 
   // Атомарный дедуп: попытка создать запись сообщения служит замком.
   // Если false — это сообщение уже обрабатывается/обработано, выходим.
-  const isNew = await markMessageProcessed(dialogue.id, avitoMsgId, 'GUEST', msgText)
+  const isNew = await markMessageProcessed(dialogue.id, avitoMsgId, 'GUEST', maskedText)
   if (!isNew) return
   await updateDialogue(avitoChatId, tenantId, {
     messageCount: dialogue.messageCount + 1,
@@ -263,19 +270,19 @@ async function processMessage(
 
   if (isPaymentStatusIntent(textLower)) {
     console.log(`[bot][${tenantId}] Payment-status intent in chat ${avitoChatId} → programmatic reply`)
-    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, msgText, PAYMENT_STATUS_REPLY, 'bot-payment')
+    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, maskedText, PAYMENT_STATUS_REPLY, 'bot-payment')
     return
   }
 
   if (isSmsIntent(textLower)) {
     console.log(`[bot][${tenantId}] SMS intent in chat ${avitoChatId} → programmatic reply`)
-    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, msgText, SMS_REPLY, 'bot-sms')
+    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, maskedText, SMS_REPLY, 'bot-sms')
     return
   }
 
   if (isAckIntent(textLower)) {
     console.log(`[bot][${tenantId}] Ack intent in chat ${avitoChatId} → programmatic reply`)
-    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, msgText, ACK_REPLY, 'bot-ack')
+    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, maskedText, ACK_REPLY, 'bot-ack')
     return
   }
 
@@ -316,7 +323,7 @@ async function processMessage(
   // отправку). Best-effort — сбой извлечения не влияет на основной ответ.
   void (async () => {
     try {
-      const topic = await extractTopics(msgText)
+      const topic = await extractTopics(maskedText)
       if (!topic) return
       const existing = dialogue.summary || ''
       // Не дублируем уже зафиксированную тему; лимит 300 символов на summary.
@@ -338,9 +345,9 @@ async function processMessage(
   if (tenant.telegramBotToken && tenant.telegramChatId) {
     const isUnknown = filteredReply.includes('Уточню и вернусь с ответом')
     if (isUnknown) {
-      await sendUnknownAnswerAlert(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, msgText, filteredReply)
+      await sendUnknownAnswerAlert(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, maskedText, filteredReply)
     } else {
-      await sendDialogueNotification(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, msgText, filteredReply)
+      await sendDialogueNotification(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, maskedText, filteredReply)
     }
   }
 
