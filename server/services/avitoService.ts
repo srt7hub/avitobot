@@ -39,6 +39,32 @@ export interface TenantAvitoConfig {
   pollingStartedAt?: Date | null
 }
 
+// Структурированная ошибка Avito API — несёт HTTP-статус и retry-after,
+// чтобы вызывающий код мог отличить 402 (блок тарифа) и 429 (rate-limit)
+// без парсинга текста сообщения.
+export class AvitoApiError extends Error {
+  status: number
+  retryAfter?: number
+  constructor(message: string, status: number, retryAfter?: number) {
+    super(message)
+    this.name = 'AvitoApiError'
+    this.status = status
+    this.retryAfter = retryAfter
+  }
+}
+
+// Бросает AvitoApiError по не-ok ответу. Для 429 пытается достать Retry-After.
+async function throwAvitoError(tenantId: string, op: string, res: Response): Promise<never> {
+  const body = await res.text().catch(() => '')
+  let retryAfter: number | undefined
+  if (res.status === 429) {
+    const header = res.headers.get('retry-after')
+    const parsed = header ? Number(header) : NaN
+    retryAfter = Number.isFinite(parsed) ? parsed : 10
+  }
+  throw new AvitoApiError(`[avitoService][${tenantId}] ${op} failed: ${res.status} ${body}`, res.status, retryAfter)
+}
+
 // Per-tenant in-memory token cache (accessToken + expiresAt)
 const tokenCache = new Map<string, AvitoTokenState>()
 
@@ -151,10 +177,7 @@ export async function getChats(config: TenantAvitoConfig, limit = 100, offset = 
       `${BASE_URL}/messenger/v2/accounts/${userId}/chats?limit=${limit}&offset=${offset}&unread_only=false`,
       { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }
     )
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(`[avitoService][${config.tenantId}] getChats failed: ${res.status} ${body}`)
-    }
+    if (!res.ok) await throwAvitoError(config.tenantId, 'getChats', res)
     const data = await res.json() as { chats: AvitoChat[] }
     return (data.chats || []).map(chat => ({
       ...chat,
@@ -182,10 +205,7 @@ export async function getMessages(config: TenantAvitoConfig, chatId: string): Pr
       `${BASE_URL}/messenger/v3/accounts/${userId}/chats/${chatId}/messages/`,
       { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }
     )
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(`[avitoService][${config.tenantId}] getMessages failed: ${res.status} ${body}`)
-    }
+    if (!res.ok) await throwAvitoError(config.tenantId, 'getMessages', res)
     const data = await res.json() as { messages: Array<Record<string, unknown>> }
     return (data.messages || []).map(m => ({
       ...m,
@@ -206,10 +226,7 @@ export async function sendMessage(config: TenantAvitoConfig, chatId: string, tex
         signal: AbortSignal.timeout(15_000),
       }
     )
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(`[avitoService][${config.tenantId}] sendMessage failed: ${res.status} ${body}`)
-    }
+    if (!res.ok) await throwAvitoError(config.tenantId, 'sendMessage', res)
   })
 }
 
@@ -223,10 +240,7 @@ export async function markAsRead(config: TenantAvitoConfig, chatId: string): Pro
         signal: AbortSignal.timeout(15_000),
       }
     )
-    if (!res.ok) {
-      const body = await res.text()
-      throw new Error(`[avitoService][${config.tenantId}] markAsRead failed: ${res.status} ${body}`)
-    }
+    if (!res.ok) await throwAvitoError(config.tenantId, 'markAsRead', res)
   })
 }
 

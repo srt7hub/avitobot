@@ -1,5 +1,5 @@
 import prisma from './prisma.js'
-import { getAllChats, getMessages, sendMessage, markAsRead, type TenantAvitoConfig } from './services/avitoService.js'
+import { getAllChats, getMessages, sendMessage, markAsRead, AvitoApiError, type TenantAvitoConfig } from './services/avitoService.js'
 import { buildSystemPrompt, generateReply } from './services/aiService.js'
 import { sanitizeAiResponse } from './services/responseFilter.js'
 import {
@@ -329,8 +329,29 @@ async function processMessage(
   console.log(`[bot][${tenantId}] Replied to chat ${avitoChatId}: "${filteredReply.slice(0, 60)}..."`)
 }
 
+// ─── Runtime-состояние блокировок Avito API (в памяти, per-tenant) ──────────
+// 402 — тариф Авито Pro не поддерживает чтение сообщений: поллинг тенанта
+// останавливается до рестарта процесса или ручного включения poll'а в панели.
+// 429 — rate-limit: тенант пропускается до истечения retry-after.
+const planBlockedTenants = new Set<string>()
+const rateLimitedUntil = new Map<string, number>() // tenantId → timestamp (ms)
+
+// Re-throw'им 402/429 наружу, чтобы их обработал tenant-level catch и остановил
+// поллинг тенанта; остальные ошибки чата глотаем (один битый чат не валит цикл).
+function isFatalAvitoError(err: unknown): err is AvitoApiError {
+  return err instanceof AvitoApiError && (err.status === 402 || err.status === 429)
+}
+
 async function processTenant(config: PrismaTenantAvitoConfig & { tenant: Tenant }): Promise<void> {
   const { tenantId } = config
+
+  // Тариф заблокирован (402) — тихо пропускаем тенант до рестарта/ре-энейбла.
+  if (planBlockedTenants.has(tenantId)) return
+
+  // Rate-limit (429) — ждём истечения retry-after.
+  const blockedUntil = rateLimitedUntil.get(tenantId)
+  if (blockedUntil && Date.now() < blockedUntil) return
+  if (blockedUntil) rateLimitedUntil.delete(tenantId)
 
   // Предохранитель первого запуска: фиксируем момент старта поллинга один раз.
   // Все сообщения старше этого момента будут проигнорированы (см. processMessage).
@@ -369,16 +390,39 @@ async function processTenant(config: PrismaTenantAvitoConfig & { tenant: Tenant 
           await processMessage(config, chat, message)
         }
       } catch (err) {
+        // 402/429 — фатально для всего тенанта: пробрасываем наружу.
+        if (isFatalAvitoError(err)) throw err
         console.error(`[bot][${tenantId}] Error processing chat ${chat.id}:`, err)
       }
     }
 
     await prisma.botSession.upsert({
       where: { tenantId },
-      update: { isRunning: true, lastPollAt: new Date() },
+      update: { isRunning: true, lastPollAt: new Date(), errorCount: 0 },
       create: { tenantId, isRunning: true, lastPollAt: new Date() },
     })
   } catch (err) {
+    // ─── 402: тариф Авито не поддерживает чтение сообщений ─────────────────────
+    if (err instanceof AvitoApiError && err.status === 402) {
+      planBlockedTenants.add(tenantId)
+      console.error(`[bot][${tenantId}] ⚠️  Avito API 402 — тариф заблокирован. Поллинг тенанта остановлен.`)
+      await prisma.botSession.upsert({
+        where: { tenantId },
+        update: { isRunning: false, lastError: 'Avito API 402: тариф Pro не поддерживает чтение сообщений' },
+        create: { tenantId, isRunning: false, lastError: 'Avito API 402: тариф Pro не поддерживает чтение сообщений' },
+      })
+      await sendOpsAlert(`[${tenantId}] ⚠️ Avito API заблокирован (402): тариф Pro не поддерживает чтение сообщений. Автоответы остановлены до проверки тарифа.`)
+      return
+    }
+
+    // ─── 429: rate-limit — пропускаем тенант до истечения retry-after ──────────
+    if (err instanceof AvitoApiError && err.status === 429) {
+      const retryAfterSec = err.retryAfter ?? 10
+      rateLimitedUntil.set(tenantId, Date.now() + retryAfterSec * 1000)
+      console.warn(`[bot][${tenantId}] Avito API 429 — rate-limited, пауза ${retryAfterSec}s`)
+      return
+    }
+
     const errorMsg = err instanceof Error ? err.message : String(err)
     console.error(`[bot][${tenantId}] Poll error:`, errorMsg)
 
@@ -400,6 +444,16 @@ async function pollAllTenants(): Promise<void> {
       where: { pollingEnabled: true, tenant: { status: 'ACTIVE' } },
       include: { tenant: true },
     })
+
+    // Если оператор отключил поллинг тенанта (он выпал из active-выборки), снимаем
+    // его 402-блокировку: повторное включение в панели возобновит работу без рестарта.
+    const activeIds = new Set(configs.map(c => c.tenantId))
+    for (const blockedId of planBlockedTenants) {
+      if (!activeIds.has(blockedId)) {
+        planBlockedTenants.delete(blockedId)
+        console.log(`[bot][${blockedId}] Поллинг был отключён оператором — снимаем 402-блокировку`)
+      }
+    }
 
     if (configs.length === 0) return
 
