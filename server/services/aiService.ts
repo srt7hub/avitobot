@@ -244,3 +244,42 @@ export async function generateReply(
 
   throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
 }
+
+/**
+ * Извлекает тему из сообщения гостя коротким дешёвым AI-запросом.
+ * Возвращает 1-3 слова ("парковка", "оплата", "время заезда") или '' при сбое.
+ * Best-effort: никогда не бросает и не ретраит — это вспомогательная функция
+ * для накопления памяти диалога, её сбой не должен влиять на основной ответ.
+ */
+export async function extractTopics(userMessage: string): Promise<string> {
+  const token = process.env.REPLICATE_API_TOKEN
+  if (!token) return ''
+
+  try {
+    const res = await fetch(REPLICATE_API_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Token ${token}`,
+        'Content-Type': 'application/json',
+        Prefer: 'wait',
+      },
+      body: JSON.stringify({
+        input: {
+          prompt: `Из сообщения гостя извлеки тему 1-3 словами (например: "парковка", "оплата", "время заезда"). Только тему, без пояснений.\n\nСообщение: "${userMessage.slice(0, 200)}"`,
+          system_instruction: 'Ты извлекаешь тему из сообщения. Отвечай ТОЛЬКО 1-3 словами.',
+          max_output_tokens: 20,
+          temperature: 0.1,
+        },
+      }),
+    })
+
+    if (!res.ok) return ''
+    const prediction = await res.json() as ReplicatePrediction
+    if (prediction.status === 'succeeded' && prediction.output) {
+      return prediction.output.join('').trim().slice(0, 50)
+    }
+    return ''
+  } catch {
+    return ''
+  }
+}

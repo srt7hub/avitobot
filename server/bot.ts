@@ -2,7 +2,7 @@ import express from 'express'
 import prisma from './prisma.js'
 import { initSentry, captureError } from './sentry.js'
 import { getAllChats, getMessages, sendMessage, markAsRead, AvitoApiError, type TenantAvitoConfig } from './services/avitoService.js'
-import { buildSystemPrompt, generateReply } from './services/aiService.js'
+import { buildSystemPrompt, generateReply, extractTopics } from './services/aiService.js'
 import { sanitizeAiResponse } from './services/responseFilter.js'
 import {
   getOrCreateDialogue,
@@ -311,6 +311,22 @@ async function processMessage(
 
   const botMsgId = `bot-${Date.now()}-${Math.random().toString(36).slice(2)}`
   await markMessageProcessed(dialogue.id, botMsgId, 'BOT', filteredReply)
+
+  // Память диалога: извлекаем тему и дописываем в summary (асинхронно, не блокируем
+  // отправку). Best-effort — сбой извлечения не влияет на основной ответ.
+  void (async () => {
+    try {
+      const topic = await extractTopics(msgText)
+      if (!topic) return
+      const existing = dialogue.summary || ''
+      // Не дублируем уже зафиксированную тему; лимит 300 символов на summary.
+      if (existing.toLowerCase().includes(topic.toLowerCase())) return
+      const updated = (existing ? `${existing}, ${topic}` : topic).slice(0, 300)
+      await updateDialogue(avitoChatId, tenantId, { summary: updated })
+    } catch (err) {
+      console.warn(`[bot][${tenantId}] extractTopics/summary update failed for chat ${avitoChatId}:`, err)
+    }
+  })()
 
   await prisma.botSession.upsert({
     where: { tenantId },
