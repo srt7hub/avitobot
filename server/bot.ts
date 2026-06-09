@@ -404,7 +404,9 @@ async function processTenant(config: PrismaTenantAvitoConfig & { tenant: Tenant 
   }
 
   try {
-    const chats = await getAllChats(avitoConfig)
+    // unread_only=true: тянем только чаты с непрочитанными сообщениями — getMessages
+    // вызываем лишь для них, а не для всех чатов тенанта (экономия rate-limit Авито).
+    const chats = await getAllChats(avitoConfig, true)
 
     for (const chat of chats) {
       try {

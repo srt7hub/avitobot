@@ -171,10 +171,10 @@ async function withToken<T>(config: TenantAvitoConfig, fn: (token: string, userI
   return fn(state.accessToken, config.avitoUserId)
 }
 
-export async function getChats(config: TenantAvitoConfig, limit = 100, offset = 0): Promise<AvitoChat[]> {
+export async function getChats(config: TenantAvitoConfig, limit = 100, offset = 0, unreadOnly = false): Promise<AvitoChat[]> {
   return withToken(config, async (token, userId) => {
     const res = await fetch(
-      `${BASE_URL}/messenger/v2/accounts/${userId}/chats?limit=${limit}&offset=${offset}&unread_only=false`,
+      `${BASE_URL}/messenger/v2/accounts/${userId}/chats?limit=${limit}&offset=${offset}&unread_only=${unreadOnly}`,
       { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) }
     )
     if (!res.ok) await throwAvitoError(config.tenantId, 'getChats', res)
@@ -186,12 +186,16 @@ export async function getChats(config: TenantAvitoConfig, limit = 100, offset = 
   })
 }
 
-export async function getAllChats(config: TenantAvitoConfig): Promise<AvitoChat[]> {
+// unreadOnly=true — просим Авито вернуть ТОЛЬКО чаты с непрочитанными сообщениями.
+// Это резко сокращает число чатов, для которых придётся тянуть getMessages, и
+// снимает основную нагрузку на rate-limit Авито. Системные сообщения о новой
+// брони приходят как непрочитанные, поэтому при unreadOnly они не теряются.
+export async function getAllChats(config: TenantAvitoConfig, unreadOnly = false): Promise<AvitoChat[]> {
   const all: AvitoChat[] = []
   const limit = 100
   let offset = 0
   while (true) {
-    const page = await getChats(config, limit, offset)
+    const page = await getChats(config, limit, offset, unreadOnly)
     all.push(...page)
     if (page.length < limit) break
     offset += limit
