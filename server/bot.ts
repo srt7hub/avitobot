@@ -12,12 +12,20 @@ import {
 } from './services/memoryService.js'
 import { getFaqForProperty } from './services/faqService.js'
 import { sendHumanTakeoverAlert, sendDialogueNotification, sendUnknownAnswerAlert, sendOpsAlert } from './services/telegramService.js'
+import { isPaymentStatusIntent, isSmsIntent, isAckIntent } from './constants/intents.js'
 import type { AvitoChat, AvitoMessage } from './services/avitoService.js'
 import type { TenantAvitoConfig as PrismaTenantAvitoConfig, Tenant } from '@prisma/client'
 
 const OPERATOR_KEYWORDS = ['оператор', 'человек', 'живой', 'менеджер', 'поговорить с человеком']
 const HUMAN_TAKEOVER_REPLY = 'Передаю вас менеджеру, он свяжется в ближайшее время.'
 const PAUSE_MINUTES = 30
+
+// Детерминированные ответы на вопросы, где LLM нельзя доверять.
+// Бот НЕ знает реального статуса оплаты (нет модели Booking), поэтому даёт
+// безопасный нейтральный ответ вместо выдуманного «оплата подтверждена».
+const PAYMENT_STATUS_REPLY = 'Проверьте, пожалуйста, статус заявки в приложении Авито — там отображается актуальное состояние брони и оплаты.'
+const SMS_REPLY = 'Уведомление придёт в ближайшее время.'
+const ACK_REPLY = 'Если возникнут вопросы — пишите, всегда на связи.'
 
 // Служебные строки, которые Авито присылает как обычный text-контент
 // (удаление сообщения и т.п.). На них отвечать НЕ нужно.
@@ -60,6 +68,36 @@ function isServiceMessage(message: AvitoMessage, text: string): boolean {
   if (message.type && message.type !== 'text') return true
   const normalized = text.trim().toLowerCase()
   return SERVICE_MESSAGE_TEXTS.includes(normalized)
+}
+
+// Отправляет детерминированный (не-AI) ответ: шлёт в Авито, помечает прочитанным,
+// записывает bot-сообщение, инкрементит счётчики и уведомляет оператора в Telegram.
+// Используется для перехваченных интентов (оплата/SMS/ack), где ответ программный.
+async function sendProgrammaticReply(
+  config: PrismaTenantAvitoConfig & { tenant: Tenant },
+  avitoConfig: TenantAvitoConfig,
+  dialogueId: string,
+  avitoChatId: string,
+  guestName: string,
+  guestMessage: string,
+  reply: string,
+  botMsgIdPrefix: string
+): Promise<void> {
+  const { tenantId, tenant } = config
+
+  await sendMessage(avitoConfig, avitoChatId, reply)
+  await markAsRead(avitoConfig, avitoChatId)
+  await markMessageProcessed(dialogueId, `${botMsgIdPrefix}-${Date.now()}`, 'BOT', reply)
+
+  await prisma.botSession.upsert({
+    where: { tenantId },
+    update: { messagesDay: { increment: 1 }, messagesWeek: { increment: 1 }, messagesMonth: { increment: 1 }, lastPollAt: new Date(), errorCount: 0 },
+    create: { tenantId, messagesDay: 1, messagesWeek: 1, messagesMonth: 1, isRunning: true },
+  })
+
+  if (tenant.telegramBotToken && tenant.telegramChatId) {
+    await sendDialogueNotification(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, guestMessage, reply)
+  }
 }
 
 async function processMessage(
@@ -215,6 +253,30 @@ async function processMessage(
     return
   }
 
+  // ─── Программные интенты (перехват ДО AI) ──────────────────────────────────
+  // Эти вопросы требуют детерминированного ответа: LLM на них галлюцинирует
+  // (например, выдумывает «оплата подтверждена»). Отвечаем шаблоном и выходим.
+  const textLower = msgText.toLowerCase()
+  const guestName = chat.users?.find(u => u.id !== Number(config.avitoUserId))?.name ?? 'Гость'
+
+  if (isPaymentStatusIntent(textLower)) {
+    console.log(`[bot][${tenantId}] Payment-status intent in chat ${avitoChatId} → programmatic reply`)
+    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, msgText, PAYMENT_STATUS_REPLY, 'bot-payment')
+    return
+  }
+
+  if (isSmsIntent(textLower)) {
+    console.log(`[bot][${tenantId}] SMS intent in chat ${avitoChatId} → programmatic reply`)
+    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, msgText, SMS_REPLY, 'bot-sms')
+    return
+  }
+
+  if (isAckIntent(textLower)) {
+    console.log(`[bot][${tenantId}] Ack intent in chat ${avitoChatId} → programmatic reply`)
+    await sendProgrammaticReply(config, avitoConfig, dialogue.id, avitoChatId, guestName, msgText, ACK_REPLY, 'bot-ack')
+    return
+  }
+
   // Build chat history for AI
   const recentMsgs = await getRecentMessages(avitoChatId, tenantId, 10)
   const chatHistory = recentMsgs.map(m => ({
@@ -256,7 +318,6 @@ async function processMessage(
 
   // Telegram notifications
   if (tenant.telegramBotToken && tenant.telegramChatId) {
-    const guestName = chat.users?.find(u => u.id !== Number(config.avitoUserId))?.name ?? 'Гость'
     const isUnknown = filteredReply.includes('Уточню и вернусь с ответом')
     if (isUnknown) {
       await sendUnknownAnswerAlert(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, msgText, filteredReply)
