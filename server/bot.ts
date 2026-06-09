@@ -13,6 +13,8 @@ import {
   getRecentMessages,
 } from './services/memoryService.js'
 import { getFaqForProperty } from './services/faqService.js'
+import { findBookingForChat } from './services/bookingService.js'
+import { isAiSilentPhase } from './utils/guestPhase.js'
 import { sendHumanTakeoverAlert, sendDialogueNotification, sendUnknownAnswerAlert, sendOpsAlert } from './services/telegramService.js'
 import { maskPii } from './services/piiService.js'
 import { isPaymentStatusIntent, isSmsIntent, isAckIntent } from './constants/intents.js'
@@ -286,6 +288,21 @@ async function processMessage(
     return
   }
 
+  // Определяем бронь и фазу гостя — от неё зависит гейтинг чувствительных данных
+  // и поведение бота. Без брони фаза = NO_BOOKING, бот работает как раньше.
+  const bookingResult = await findBookingForChat(tenantId, avitoChatId, property?.id)
+  const phase = bookingResult?.phase ?? 'NO_BOOKING'
+
+  // Тихие фазы (сразу после выезда / давний гость): AI не отвечает сам — зовём оператора.
+  if (isAiSilentPhase(phase)) {
+    console.log(`[bot][${tenantId}] Phase ${phase} in chat ${avitoChatId} — AI молчит, эскалация оператору`)
+    await markAsRead(avitoConfig, avitoChatId)
+    if (tenant.telegramBotToken && tenant.telegramChatId) {
+      await sendUnknownAnswerAlert(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, maskedText, `— фаза ${phase}, нужен оператор —`)
+    }
+    return
+  }
+
   // Build chat history for AI
   const recentMsgs = await getRecentMessages(avitoChatId, tenantId, 10)
   const chatHistory = recentMsgs.map(m => ({
@@ -296,12 +313,23 @@ async function processMessage(
   // Load FAQ
   const faqEntries = await getFaqForProperty(tenantId, property?.id)
 
-  // Build system prompt
+  // Build system prompt (с фазой и чувствительными данными объекта — гейтинг внутри)
   const systemPrompt = buildSystemPrompt({
     botName: tenant.botName,
-    property: property ? { name: property.name, address: property.address, description: property.description } : null,
+    property: property
+      ? {
+          name: property.name,
+          address: property.address,
+          description: property.description,
+          doorCode: property.doorCode,
+          wifiName: property.wifiName,
+          wifiPassword: property.wifiPassword,
+          checkInInstructions: property.checkInInstructions,
+        }
+      : null,
     faqEntries: faqEntries.map(f => ({ question: f.question, answer: f.answer })),
     memorySummary: dialogue.summary,
+    phase,
   })
 
   // Generate AI reply

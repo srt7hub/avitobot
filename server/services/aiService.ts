@@ -1,6 +1,29 @@
+import { type GuestPhase, isSensitiveDataAllowed } from '../utils/guestPhase.js'
+
 const REPLICATE_API_URL = 'https://api.replicate.com/v1/models/google/gemini-3-flash/predictions'
 
 type FaqEntry = { question: string; answer: string }
+
+type PropertyForPrompt = {
+  name: string
+  address: string
+  description: string
+  doorCode?: string
+  wifiName?: string
+  wifiPassword?: string
+  checkInInstructions?: string
+}
+
+// Фазовая вставка в промпт: что боту разрешено/запрещено на текущем этапе.
+function buildPhaseSection(phase: GuestPhase): string {
+  if (phase === 'AWAITING_PAYMENT' || phase === 'PAID_BEFORE') {
+    return `\n═══ ВНИМАНИЕ — ГОСТЬ ЕЩЁ НЕ ЗАЕХАЛ ═══\nНЕ давай гостю код от двери, пароль wifi и инструкции по заселению — они отправляются ближе к заезду.\n`
+  }
+  if (phase === 'POST_STAY_ACTIVE') {
+    return `\n═══ ВНИМАНИЕ — ГОСТЬ УЖЕ ВЫЕХАЛ ═══\nЗАПРЕЩЕНО: называть код от двери, пароль wifi, давать инструкции по заселению.\nРАЗРЕШЕНО: общие вопросы (отзыв, забытые вещи, повторное бронирование).\nЕсли вопрос требует доступа к квартире — отвечай: «Уточню и вернусь с ответом»\n`
+  }
+  return ''
+}
 
 function sanitizeForPrompt(value: unknown): unknown {
   if (typeof value === 'string') {
@@ -22,15 +45,34 @@ function sanitizeForPrompt(value: unknown): unknown {
 
 export function buildSystemPrompt(params: {
   botName: string
-  property: { name: string; address: string; description: string } | null
+  property: PropertyForPrompt | null
   faqEntries: FaqEntry[]
   memorySummary: string
+  phase?: GuestPhase
 }): string {
-  const { botName, property, faqEntries, memorySummary } = params
+  const { botName, property, faqEntries, memorySummary, phase = 'NO_BOOKING' } = params
+
+  // Чувствительные данные отдаём в промпт только если фаза это разрешает
+  // (гость оплатил и заезжает/проживает/выезжает). Иначе бот их просто не видит.
+  const sensitiveAllowed = isSensitiveDataAllowed(phase)
+  const sensitiveLines: string[] = []
+  if (property && sensitiveAllowed) {
+    if (property.doorCode) sensitiveLines.push(`Код двери: ${sanitizeForPrompt(property.doorCode)}`)
+    if (property.wifiName) sensitiveLines.push(`WiFi сеть: ${sanitizeForPrompt(property.wifiName)}`)
+    if (property.wifiPassword) sensitiveLines.push(`WiFi пароль: ${sanitizeForPrompt(property.wifiPassword)}`)
+    if (property.checkInInstructions) sensitiveLines.push(`Инструкция по заселению: ${sanitizeForPrompt(property.checkInInstructions)}`)
+  }
 
   const propertyContext = property
-    ? `Название: ${sanitizeForPrompt(property.name)}\nАдрес: ${sanitizeForPrompt(property.address)}\nОписание: ${sanitizeForPrompt(property.description)}`
+    ? [
+        `Название: ${sanitizeForPrompt(property.name)}`,
+        `Адрес: ${sanitizeForPrompt(property.address)}`,
+        `Описание: ${sanitizeForPrompt(property.description)}`,
+        ...sensitiveLines,
+      ].join('\n')
     : 'Информация об объекте не указана.'
+
+  const phaseSection = buildPhaseSection(phase)
 
   const faqSection = faqEntries.length > 0
     ? `\n═══ БАЗА ЗНАНИЙ (FAQ) ═══\nИспользуй эти ответы когда гость задаёт похожий вопрос. Отвечай своими словами:\n\n${faqEntries.map(e => `В: ${e.question}\nО: ${e.answer}`).join('\n\n')}\n`
@@ -111,7 +153,7 @@ export function buildSystemPrompt(params: {
 Если гость написал "хочу оператора", "живой человек", "позовите менеджера" — отвечай:
 "Передаю вас менеджеру, он свяжется в ближайшее время."
 Больше НЕ отвечай в этом чате — оператор берёт управление.
-
+${phaseSection}
 КОНТЕКСТ ОБЪЕКТА:
 ${propertyContext}${faqSection}${memorySection}`
 }

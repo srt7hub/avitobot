@@ -27,6 +27,7 @@ model Tenant {
   dialogues   Dialogue[]
   unhandled   UnhandledQuestion[]
   botSessions BotSession[]
+  bookings    Booking[]
 }
 
 enum TenantStatus {
@@ -92,15 +93,62 @@ model Property {
   description String   @default("")
   avitoItemId String   @default("")
   isActive    Boolean  @default(true)
+
+  // Чувствительные данные — отдаются гостю только в разрешённой фазе
+  // (оплатил + заехал), см. isSensitiveDataAllowed / guestPhase.
+  doorCode             String @default("")
+  wifiName             String @default("")
+  wifiPassword         String @default("")
+  checkInInstructions  String @default("")
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   faqEntries  FaqEntry[]
   dialogues   Dialogue[]
+  bookings    Booking[]
 
   @@index([tenantId])
   @@index([tenantId, avitoItemId])
+}
+
+// ─── Booking ──────────────────────────────────────────────────────────────────
+// Бронь гостя. Заполняется синхронизацией из Avito STR booking API (отдельный
+// этап). Нужна боту для вычисления фазы гостя (computeGuestPhase) и гейтинга
+// чувствительных данных (код двери / wifi выдаются только оплатившему и заехавшему).
+
+model Booking {
+  id             String   @id @default(cuid())
+  tenantId       String
+  propertyId     String
+
+  avitoBookingId String   @default("")   // ID брони из Avito STR API
+  avitoChatId    String   @default("")   // привязка к чату мессенджера
+
+  guestName      String   @default("")
+  checkIn        DateTime
+  checkOut       DateTime
+
+  totalPrice     Float    @default(0)
+  prepaidAmount  Float    @default(0)    // предоплата (safe_deposit) — >0 значит оплачено
+
+  // accessUnlocked — признак, что доступ к квартире можно открывать (оплачено).
+  // Выставляется синхронизацией; используется фазами как явный флаг оплаты.
+  accessUnlocked Boolean  @default(false)
+
+  status         String   @default("ПОДТВЕРЖДЕНО")
+  source         String   @default("Авито")
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, avitoBookingId])
+  @@index([tenantId, avitoChatId])
+  @@index([propertyId])
 }
 
 // ─── FaqEntry ─────────────────────────────────────────────────────────────────
