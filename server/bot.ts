@@ -19,9 +19,24 @@ const OPERATOR_KEYWORDS = ['оператор', 'человек', 'живой', '
 const HUMAN_TAKEOVER_REPLY = 'Передаю вас менеджеру, он свяжется в ближайшее время.'
 const PAUSE_MINUTES = 30
 
+// Служебные строки, которые Авито присылает как обычный text-контент
+// (удаление сообщения и т.п.). На них отвечать НЕ нужно.
+const SERVICE_MESSAGE_TEXTS = [
+  'сообщение удалено',
+]
+
 function isOperatorRequest(text: string): boolean {
   const lower = text.toLowerCase()
   return OPERATOR_KEYWORDS.some(kw => lower.includes(kw))
+}
+
+// Отвечаем только на реальные текстовые сообщения гостя.
+// Отсекаем: не-текстовые типы (картинки/голос/локация — у них пустой text,
+// но type != text) и системные строки вроде "Сообщение удалено".
+function isServiceMessage(message: AvitoMessage, text: string): boolean {
+  if (message.type && message.type !== 'text') return true
+  const normalized = text.trim().toLowerCase()
+  return SERVICE_MESSAGE_TEXTS.includes(normalized)
 }
 
 async function processMessage(
@@ -35,6 +50,12 @@ async function processMessage(
   const avitoMsgId = String(message.id)
 
   if (!msgText.trim()) return
+
+  // Игнорируем служебные/не-текстовые сообщения (удаление, картинки, голос и т.п.)
+  if (isServiceMessage(message, msgText)) {
+    console.log(`[bot][${tenantId}] Skip service message in chat ${avitoChatId}: "${msgText.slice(0, 40)}"`)
+    return
+  }
 
   // Get or create dialogue
   const property = await prisma.property.findFirst({
