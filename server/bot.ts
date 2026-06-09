@@ -25,6 +25,29 @@ const SERVICE_MESSAGE_TEXTS = [
   'сообщение удалено',
 ]
 
+// Фразы в system-сообщениях Авито, означающие новую бронь/предоплату.
+const BOOKING_KEYWORDS = [
+  'новая бронь',
+  'новая заявка',
+  'создана заявка',
+  'заявка на бронирование',
+  'бронирование создано',
+  'запрос на бронирование',
+]
+
+// Не реагируем на system-сообщения старше этого возраста (защита от того,
+// что после рестарта бота старая "новая бронь" триггерит приветствие заново).
+const BOOKING_MAX_AGE_MS = 2 * 60 * 60 * 1000 // 2 часа
+
+function isSystemMessage(message: AvitoMessage): boolean {
+  return message.type === 'system' || String(message.author_id) === '0'
+}
+
+function isNewBookingMessage(text: string): boolean {
+  const lower = text.toLowerCase()
+  return BOOKING_KEYWORDS.some(kw => lower.includes(kw))
+}
+
 function isOperatorRequest(text: string): boolean {
   const lower = text.toLowerCase()
   return OPERATOR_KEYWORDS.some(kw => lower.includes(kw))
@@ -51,6 +74,70 @@ async function processMessage(
 
   if (!msgText.trim()) return
 
+  const property = await prisma.property.findFirst({
+    where: { tenantId, avitoItemId: chat.item_id, isActive: true },
+  })
+
+  // ─── Системные сообщения Авито (новая бронь / предоплата) ───────────────────
+  // Обрабатываем ДО фильтра служебных сообщений и до cutoff: момент брони
+  // критичен. На обычные системные строки (не бронь) — просто молчим.
+  if (isSystemMessage(message)) {
+    if (!isNewBookingMessage(msgText)) {
+      console.log(`[bot][${tenantId}] System message (not booking) in chat ${avitoChatId}, ignoring`)
+      return
+    }
+
+    const dialogue = await getOrCreateDialogue(tenantId, avitoChatId, property?.id)
+
+    // Дедуп: помечаем системное сообщение обработанным (замок от повторов)
+    const isNewSys = await markMessageProcessed(dialogue.id, avitoMsgId, 'GUEST', msgText)
+    if (!isNewSys) return
+
+    // Guard: приветствие уже отправлялось — не дублируем (рестарт/повторное обнаружение)
+    if (dialogue.greetingSent) {
+      console.log(`[bot][${tenantId}] New booking in chat ${avitoChatId}, but greeting already sent — skip`)
+      return
+    }
+
+    // Guard по возрасту: старое system-сообщение не должно слать приветствие заново
+    const ageMs = message.created ? Date.now() - message.created * 1000 : 0
+    const isFresh = ageMs < BOOKING_MAX_AGE_MS
+
+    const avitoConfig: TenantAvitoConfig = {
+      id: config.id, tenantId: config.tenantId, avitoClientId: config.avitoClientId,
+      avitoClientSecret: config.avitoClientSecret, avitoUserId: config.avitoUserId,
+      accessToken: config.accessToken, refreshToken: config.refreshToken,
+      tokenExpiresAt: config.tokenExpiresAt, pollingEnabled: config.pollingEnabled,
+      pollingStartedAt: config.pollingStartedAt,
+    }
+
+    const guestFirstName = (chat.users?.find(u => u.id !== Number(config.avitoUserId))?.name ?? '').split(' ')[0]
+    const greeting = guestFirstName
+      ? `Здравствуйте, ${guestFirstName}! Спасибо, что выбрали нас. Для фиксации дат за вами необходимо внести предоплату через Авито.`
+      : `Здравствуйте! Спасибо, что выбрали нас. Для фиксации дат за вами необходимо внести предоплату через Авито.`
+
+    if (isFresh) {
+      await sendMessage(avitoConfig, avitoChatId, greeting)
+      await markAsRead(avitoConfig, avitoChatId)
+      const botMsgId = `bot-booking-${Date.now()}`
+      await markMessageProcessed(dialogue.id, botMsgId, 'BOT', greeting)
+      await updateDialogue(avitoChatId, tenantId, { greetingSent: true, lastMessageAt: new Date() })
+      console.log(`[bot][${tenantId}] New booking in chat ${avitoChatId} — greeting sent`)
+
+      // Уведомления в Telegram клиента + OPS
+      const guestName = chat.users?.find(u => u.id !== Number(config.avitoUserId))?.name ?? 'Гость'
+      if (tenant.telegramBotToken && tenant.telegramChatId) {
+        await sendDialogueNotification(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, '🆕 Новая бронь', greeting)
+      }
+      await sendOpsAlert(`[${tenantId}] Новая бронь в чате ${avitoChatId} (гость: ${guestName})`)
+    } else {
+      // Старое сообщение — фиксируем greetingSent чтобы не среагировать позже, без отправки
+      await updateDialogue(avitoChatId, tenantId, { greetingSent: true })
+      console.log(`[bot][${tenantId}] Stale booking message in chat ${avitoChatId} (age ${Math.round(ageMs / 60000)}min) — marked, no greeting`)
+    }
+    return
+  }
+
   // Игнорируем служебные/не-текстовые сообщения (удаление, картинки, голос и т.п.)
   if (isServiceMessage(message, msgText)) {
     console.log(`[bot][${tenantId}] Skip service message in chat ${avitoChatId}: "${msgText.slice(0, 40)}"`)
@@ -58,9 +145,6 @@ async function processMessage(
   }
 
   // Get or create dialogue
-  const property = await prisma.property.findFirst({
-    where: { tenantId, avitoItemId: chat.item_id, isActive: true },
-  })
   const dialogue = await getOrCreateDialogue(tenantId, avitoChatId, property?.id)
 
   // Атомарный дедуп: попытка создать запись сообщения служит замком.
