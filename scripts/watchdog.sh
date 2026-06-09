@@ -5,6 +5,7 @@
 set -uo pipefail
 
 API_URL="${API_URL:-http://localhost:3010/api/health}"
+BOT_URL="${BOT_URL:-http://127.0.0.1:3011/health}"
 ENV_FILE="/var/www/avitobot/.env"
 
 if [ -f "$ENV_FILE" ]; then
@@ -30,7 +31,13 @@ if [ "$HTTP_CODE" != "200" ]; then
   exit 1
 fi
 
-# 2. Проверяем PM2-процессы
+# 2. Health-check бота (детект зависшего цикла поллинга: 200 = свежий, 503 = stale)
+BOT_CODE="$(curl -s -m 10 -o /tmp/avitobot_bot_health.json -w '%{http_code}' "$BOT_URL" || echo 000)"
+if [ "$BOT_CODE" != "200" ]; then
+  alert "Bot health-check вернул HTTP ${BOT_CODE} (${BOT_URL}) — поллинг завис или процесс не отвечает"
+fi
+
+# 3. Проверяем PM2-процессы
 if command -v pm2 > /dev/null 2>&1; then
   for proc in avitobot-api avitobot-bot; do
     STATUS="$(pm2 jlist 2>/dev/null | grep -o "\"name\":\"${proc}\"[^}]*\"status\":\"[a-z]*\"" | grep -o '"status":"[a-z]*"' | cut -d'"' -f4)"

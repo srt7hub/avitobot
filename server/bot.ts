@@ -1,4 +1,6 @@
+import express from 'express'
 import prisma from './prisma.js'
+import { initSentry, captureError } from './sentry.js'
 import { getAllChats, getMessages, sendMessage, markAsRead, AvitoApiError, type TenantAvitoConfig } from './services/avitoService.js'
 import { buildSystemPrompt, generateReply } from './services/aiService.js'
 import { sanitizeAiResponse } from './services/responseFilter.js'
@@ -468,6 +470,9 @@ const POLL_INTERVAL_MS = 30_000
 let isPolling = false
 let stopped = false
 let pollTimer: NodeJS.Timeout | null = null
+// Время последнего завершённого цикла поллинга — используется /health для
+// детекта «зависшего» бота (процесс online в PM2, но цикл не крутится).
+let lastPollFinishedAt = Date.now()
 
 // Самопланирующийся цикл: следующий поллинг стартует только после завершения
 // текущего, что исключает наложение циклов и двойную обработку сообщений.
@@ -480,18 +485,66 @@ async function pollLoop(): Promise<void> {
   } catch (err) {
     console.error('[bot] pollLoop error:', err)
   } finally {
+    lastPollFinishedAt = Date.now()
     isPolling = false
     if (!stopped) pollTimer = setTimeout(pollLoop, POLL_INTERVAL_MS)
   }
 }
 
-console.log('[bot] AvitoBot started, polling every 30s')
-pollLoop()
+// ─── /health — лёгкий HTTP-эндпоинт для watchdog и внешнего мониторинга ──────
+// Возвращает 200 если последний цикл поллинга завершился недавно, иначе 503 —
+// так watchdog отличает живой бот от зависшего, а не только «процесс запущен».
+function startHealthServer(): void {
+  const port = Number(process.env.BOT_HEALTH_PORT) || 3011
+  const app = express()
+  app.get('/health', (_req, res) => {
+    const ageMs = Date.now() - lastPollFinishedAt
+    const stale = ageMs > POLL_INTERVAL_MS * 3 // 3 пропущенных цикла → нездоров
+    res.status(stale ? 503 : 200).json({
+      status: stale ? 'stale' : 'ok',
+      lastPollAgoMs: ageMs,
+      planBlockedTenants: planBlockedTenants.size,
+    })
+  })
+  app.listen(port, '127.0.0.1', () => {
+    console.log(`[bot] Health endpoint on http://127.0.0.1:${port}/health`)
+  })
+}
 
-process.on('SIGTERM', async () => {
-  console.log('[bot] SIGTERM received, shutting down gracefully...')
+// ─── Глобальные обработчики необработанных ошибок ────────────────────────────
+process.on('uncaughtException', (err: Error) => {
+  console.error('[bot][FATAL] uncaughtException:', err)
+  captureError(err, { component: 'avito-bot:uncaughtException' })
+  // Выходим с ошибкой — PM2 перезапустит процесс в чистом состоянии.
+  process.exit(1)
+})
+
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('[bot][FATAL] unhandledRejection:', reason)
+  captureError(reason instanceof Error ? reason : new Error(String(reason)), { component: 'avito-bot:unhandledRejection' })
+})
+
+async function shutdown(signal: string): Promise<void> {
+  console.log(`[bot] ${signal} received, shutting down gracefully...`)
   stopped = true
   if (pollTimer) clearTimeout(pollTimer)
-  await prisma.$disconnect()
+  await prisma.$disconnect().catch(() => {})
   process.exit(0)
+}
+
+process.on('SIGTERM', () => { shutdown('SIGTERM').catch(() => process.exit(1)) })
+process.on('SIGINT', () => { shutdown('SIGINT').catch(() => process.exit(1)) })
+
+// ─── Старт ───────────────────────────────────────────────────────────────────
+async function main(): Promise<void> {
+  await initSentry('avito-bot')
+  startHealthServer()
+  console.log('[bot] AvitoBot started, polling every 30s')
+  pollLoop()
+}
+
+main().catch((err) => {
+  console.error('[bot] startup error:', err)
+  captureError(err, { component: 'avito-bot:startup' })
+  process.exit(1)
 })
