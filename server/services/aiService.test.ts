@@ -65,6 +65,18 @@ test('базовый контекст объекта присутствует в
   assert.ok(prompt.includes('Аня'))
 })
 
+test('базовый промпт НЕ хардкодит бизнес-условия (они в customPrompt)', () => {
+  const prompt = buildSystemPrompt({
+    botName: 'Аня', property, faqEntries: [], memorySummary: '', phase: 'NO_BOOKING',
+  })
+  // Условия отмены/торга — индивидуальны, не должны быть зашиты в базовом
+  assert.ok(!prompt.includes('период бесплатной отмены'))
+  assert.ok(!prompt.includes('БРОНЬ БЕЗ ВОЗВРАТА'))
+  assert.ok(!prompt.includes('оставьте отзыв после проживания'))
+  // Но правила площадки Авито — на месте
+  assert.ok(prompt.includes('ПРАВИЛА АВИТО'))
+})
+
 test('customPrompt дописывается отдельной секцией, не заменяя базовые правила', () => {
   const prompt = buildSystemPrompt({
     botName: 'Аня',
@@ -102,8 +114,9 @@ test('пустой/отсутствующий customPrompt не добавляе
   const without = buildSystemPrompt({
     botName: 'Аня', property, faqEntries: [], memorySummary: '', phase: 'NO_BOOKING',
   })
-  assert.ok(!withEmpty.includes('ДОП. ИНСТРУКЦИЯ'))
-  assert.ok(!without.includes('ДОП. ИНСТРУКЦИЯ'))
+  // Проверяем именно секцию-разделитель, а не фразу (она есть в блоке ПРИОРИТЕТ базового промпта)
+  assert.ok(!withEmpty.includes('═══ ДОП. ИНСТРУКЦИЯ ОТ ВЛАДЕЛЬЦА'))
+  assert.ok(!without.includes('═══ ДОП. ИНСТРУКЦИЯ ОТ ВЛАДЕЛЬЦА'))
 })
 
 test('customPrompt не может подделать разделители секций', () => {

@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import prisma from '../../prisma.js'
+import { DEFAULT_CUSTOM_PROMPT } from '../../services/promptTemplate.js'
 
 const router = Router()
 
@@ -68,6 +69,9 @@ router.post('/clients', async (req, res) => {
         name: name.trim(),
         slug: slug.trim(),
         botName: botName?.trim() ?? 'Менеджер',
+        // Новый тенант получает шаблон-рыбу customPrompt с типовыми посуточными
+        // скриптами (бронь/отмена/торг/заезд). Оператор правит под объект.
+        customPrompt: DEFAULT_CUSTOM_PROMPT,
         telegramBotToken: telegramBotToken?.trim() ?? '',
         telegramChatId: telegramChatId?.trim() ?? '',
         users: {
