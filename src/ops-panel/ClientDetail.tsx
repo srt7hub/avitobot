@@ -242,59 +242,123 @@ function FaqSubTab({ tenantId }: { tenantId: string }) {
 // ─── Prompt sub-tab ───────────────────────────────────────────────────────────
 
 function PromptSubTab({ tenantId }: { tenantId: string }) {
-  const [prompt, setPrompt] = useState('')
+  const [basePrompt, setBasePrompt] = useState('')
+  const [customPrompt, setCustomPrompt] = useState('')
+  const [effectivePrompt, setEffectivePrompt] = useState('')
   const [isCustom, setIsCustom] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [showBase, setShowBase] = useState(false)
+  const [showEffective, setShowEffective] = useState(false)
+
+  function apply(data: { basePrompt: string; customPrompt: string; effectivePrompt: string; isCustom: boolean }) {
+    setBasePrompt(data.basePrompt)
+    setCustomPrompt(data.customPrompt)
+    setEffectivePrompt(data.effectivePrompt)
+    setIsCustom(data.isCustom)
+  }
 
   useEffect(() => {
     opsGetPrompt(tenantId).then(data => {
-      if (data) { setPrompt(data.prompt); setIsCustom(data.isCustom) }
+      if (data) apply(data)
       setLoading(false)
     })
   }, [tenantId])
 
+  async function reload() {
+    const data = await opsGetPrompt(tenantId)
+    if (data) apply(data)
+  }
+
   async function handleSave() {
     setSaving(true); setSaved(false)
-    await opsSavePrompt(tenantId, prompt)
-    setSaved(true); setSaving(false); setIsCustom(true)
+    await opsSavePrompt(tenantId, customPrompt)
+    await reload()
+    setSaved(true); setSaving(false)
   }
 
   async function handleReset() {
-    if (!window.confirm('Вы уверены? Кастомный промпт будет удалён.')) return
-    setSaving(true)
+    if (!window.confirm('Удалить доп. инструкцию клиента? Бот будет работать только по базовому промпту.')) return
+    setSaving(true); setSaved(false)
     await opsSavePrompt(tenantId, '')
-    const data = await opsGetPrompt(tenantId)
-    if (data) { setPrompt(data.prompt); setIsCustom(data.isCustom) }
-    setSaving(false); setSaved(false)
+    await reload()
+    setSaving(false)
   }
 
   if (loading) return <p className="text-sm text-gray-400 py-4">Загрузка...</p>
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="bg-orange-50 border border-orange-100 rounded-xl p-3">
-        <p className="text-xs text-orange-700">⚠ Изменение промпта влияет на все ответы бота. Сохраняйте осторожно.</p>
+        <p className="text-xs text-orange-700">
+          ⚠ Доп. инструкция клиента дописывается к базовому промпту отдельной секцией и влияет на все ответы бота. Базовые правила (Авито, гейтинг кода двери, FAQ) остаются всегда.
+        </p>
       </div>
-      {isCustom && (
-        <p className="text-xs text-emerald-600">● Используется кастомный промпт</p>
-      )}
-      <textarea
-        value={prompt}
-        onChange={e => setPrompt(e.target.value)}
-        rows={14}
-        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300 resize-y"
-      />
-      {saved && <p className="text-sm text-emerald-600">Промпт сохранён</p>}
-      <div className="flex gap-2">
-        <button onClick={handleSave} disabled={saving} className="bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors">
-          {saving ? 'Сохранение...' : 'Сохранить промпт'}
+
+      {/* Базовый промпт — read-only, генерируется кодом */}
+      <div className="border border-gray-100 rounded-xl">
+        <button
+          onClick={() => setShowBase(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <span>Базовый промпт (общий для всех, только чтение)</span>
+          <span className="text-gray-400">{showBase ? '▲' : '▼'}</span>
         </button>
-        {isCustom && (
-          <button onClick={handleReset} disabled={saving} className="border border-gray-200 text-gray-600 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50 transition-colors">
-            Сбросить к дефолтному
+        {showBase && (
+          <textarea
+            value={basePrompt}
+            readOnly
+            rows={16}
+            className="w-full border-t border-gray-100 px-4 py-3 text-xs font-mono text-gray-500 bg-gray-50 resize-y focus:outline-none rounded-b-xl"
+          />
+        )}
+      </div>
+
+      {/* Доп. инструкция клиента — редактируемая */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-gray-700">Доп. инструкция клиента (customPrompt)</label>
+          {isCustom
+            ? <span className="text-xs text-emerald-600">● Задана</span>
+            : <span className="text-xs text-gray-400">○ Пусто — только базовый</span>}
+        </div>
+        <textarea
+          value={customPrompt}
+          onChange={e => setCustomPrompt(e.target.value)}
+          rows={8}
+          placeholder="Тон, особые правила объекта, нюансы. Например: «Обращайся на вы. Заезд строго после 15:00. С животными нельзя.» Не дублируй базовые правила."
+          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-300 resize-y"
+        />
+        {saved && <p className="text-sm text-emerald-600">Сохранено</p>}
+        <div className="flex gap-2">
+          <button onClick={handleSave} disabled={saving} className="bg-gray-900 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors">
+            {saving ? 'Сохранение...' : 'Сохранить инструкцию'}
           </button>
+          {isCustom && (
+            <button onClick={handleReset} disabled={saving} className="border border-gray-200 text-gray-600 rounded-lg px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50 transition-colors">
+              Очистить
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Итоговый промпт — что реально получает бот */}
+      <div className="border border-gray-100 rounded-xl">
+        <button
+          onClick={() => setShowEffective(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <span>Итоговый промпт (что получает бот, только чтение)</span>
+          <span className="text-gray-400">{showEffective ? '▲' : '▼'}</span>
+        </button>
+        {showEffective && (
+          <textarea
+            value={effectivePrompt}
+            readOnly
+            rows={18}
+            className="w-full border-t border-gray-100 px-4 py-3 text-xs font-mono text-gray-500 bg-gray-50 resize-y focus:outline-none rounded-b-xl"
+          />
         )}
       </div>
     </div>

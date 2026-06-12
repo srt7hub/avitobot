@@ -330,6 +330,7 @@ async function processMessage(
     faqEntries: faqEntries.map(f => ({ question: f.question, answer: f.answer })),
     memorySummary: dialogue.summary,
     phase,
+    customPrompt: tenant.customPrompt,
   })
 
   // Generate AI reply

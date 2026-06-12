@@ -7,6 +7,7 @@ import FaqManager from './client-panel/FaqManager'
 import Properties from './client-panel/Properties'
 import SettingsPage from './client-panel/Settings'
 import Dialogues from './client-panel/Dialogues'
+import Playground from './client-panel/Playground'
 
 import OpsLayout from './ops-panel/OpsLayout'
 import ClientsList from './ops-panel/ClientsList'
@@ -15,9 +16,9 @@ import ClientDetail from './ops-panel/ClientDetail'
 
 // ─── Client Panel routing ─────────────────────────────────────────────────────
 
-type ClientPage = 'dashboard' | 'faq' | 'properties' | 'settings' | 'dialogues'
+type ClientPage = 'dashboard' | 'faq' | 'properties' | 'settings' | 'dialogues' | 'playground'
 
-const CLIENT_PAGES: ClientPage[] = ['dashboard', 'faq', 'properties', 'settings', 'dialogues']
+const CLIENT_PAGES: ClientPage[] = ['dashboard', 'faq', 'properties', 'settings', 'dialogues', 'playground']
 
 function getClientPage(): ClientPage {
   const hash = window.location.hash.replace('#/', '').replace('#', '')
@@ -30,6 +31,7 @@ const CLIENT_NAV: { id: ClientPage; label: string }[] = [
   { id: 'properties', label: 'Объявления' },
   { id: 'dialogues', label: 'Диалоги' },
   { id: 'settings', label: 'Настройки' },
+  { id: 'playground', label: 'Тест бота' },
 ]
 
 function ClientApp() {
@@ -78,6 +80,7 @@ function ClientApp() {
         {page === 'properties' && <Properties />}
         {page === 'dialogues' && <Dialogues />}
         {page === 'settings' && <SettingsPage />}
+        {page === 'playground' && <Playground />}
       </main>
     </div>
   )

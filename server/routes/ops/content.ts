@@ -114,14 +114,31 @@ router.get('/clients/:tenantId/prompt', async (req, res) => {
     return
   }
 
-  const prompt = tenant.customPrompt ?? buildSystemPrompt({
+  // Отдаём три части раздельно:
+  // - basePrompt: базовый шаблон (read-only, генерируется кодом, без customPrompt)
+  // - customPrompt: доп. инструкция клиента (редактируемая)
+  // - effectivePrompt: что реально получает бот (база + секция customPrompt)
+  // customPrompt не заменяет базовый, а дописывается секцией — см. buildSystemPrompt.
+  const basePrompt = buildSystemPrompt({
     botName: tenant.botName,
     property: null,
     faqEntries: [],
     memorySummary: '',
   })
+  const effectivePrompt = buildSystemPrompt({
+    botName: tenant.botName,
+    property: null,
+    faqEntries: [],
+    memorySummary: '',
+    customPrompt: tenant.customPrompt,
+  })
 
-  res.json({ prompt, isCustom: tenant.customPrompt !== null })
+  res.json({
+    basePrompt,
+    customPrompt: tenant.customPrompt ?? '',
+    effectivePrompt,
+    isCustom: tenant.customPrompt !== null,
+  })
 })
 
 router.put('/clients/:tenantId/prompt', async (req, res) => {

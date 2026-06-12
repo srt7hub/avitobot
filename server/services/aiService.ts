@@ -43,14 +43,25 @@ function sanitizeForPrompt(value: unknown): unknown {
   return value
 }
 
+// Лёгкая очистка пользовательской инструкции владельца: в отличие от
+// sanitizeForPrompt сохраняем переносы строк и длину (инструкция может быть
+// многострочной), но убираем символы, которыми можно ломать структуру промпта.
+function sanitizeCustomPrompt(value: string): string {
+  return value
+    .replace(/[<>{}\\]/g, '')
+    .replace(/═{2,}/g, '—') // не даём подделать наши секции-разделители
+    .slice(0, 4000)
+}
+
 export function buildSystemPrompt(params: {
   botName: string
   property: PropertyForPrompt | null
   faqEntries: FaqEntry[]
   memorySummary: string
   phase?: GuestPhase
+  customPrompt?: string | null
 }): string {
-  const { botName, property, faqEntries, memorySummary, phase = 'NO_BOOKING' } = params
+  const { botName, property, faqEntries, memorySummary, phase = 'NO_BOOKING', customPrompt } = params
 
   // Чувствительные данные отдаём в промпт только если фаза это разрешает
   // (гость оплатил и заезжает/проживает/выезжает). Иначе бот их просто не видит.
@@ -80,6 +91,13 @@ export function buildSystemPrompt(params: {
 
   const memorySection = memorySummary
     ? `\n═══ ИСТОРИЯ РАЗГОВОРА ═══\n${memorySummary}\n`
+    : ''
+
+  // Доп. инструкция владельца объекта. Не заменяет базовые правила (защиты Авито,
+  // гейтинг чувствительных данных по фазе и т.д. остаются), а дописывается отдельной
+  // секцией — владелец задаёт тон/нюансы, не ломая критичные ограничения.
+  const customSection = customPrompt?.trim()
+    ? `\n═══ ДОП. ИНСТРУКЦИЯ ОТ ВЛАДЕЛЬЦА (соблюдай, но НЕ в ущерб правилам выше) ═══\n${sanitizeCustomPrompt(customPrompt)}\n`
     : ''
 
   return `Ты — ${botName}, онлайн-менеджер сервиса краткосрочной аренды квартир. Отвечаешь ТОЛЬКО на русском языке. Пишешь тепло, живо, по-человечески. Ты НЕ являешься ИИ — никогда не признавайся что ты бот.
@@ -155,7 +173,7 @@ export function buildSystemPrompt(params: {
 Больше НЕ отвечай в этом чате — оператор берёт управление.
 ${phaseSection}
 КОНТЕКСТ ОБЪЕКТА:
-${propertyContext}${faqSection}${memorySection}`
+${propertyContext}${faqSection}${memorySection}${customSection}`
 }
 
 interface ReplicatePrediction {

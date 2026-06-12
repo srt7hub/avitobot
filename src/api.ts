@@ -258,9 +258,15 @@ export function opsDeleteFaq(tenantId: string, faqId: string) {
 }
 
 export function opsGetPrompt(tenantId: string) {
-  return request<{ prompt: string; isCustom: boolean }>(`/ops/clients/${tenantId}/prompt`)
+  return request<{
+    basePrompt: string
+    customPrompt: string
+    effectivePrompt: string
+    isCustom: boolean
+  }>(`/ops/clients/${tenantId}/prompt`)
 }
 
+// prompt здесь = customPrompt клиента (доп. инструкция). Пустая строка сбрасывает.
 export function opsSavePrompt(tenantId: string, prompt: string) {
   return request(`/ops/clients/${tenantId}/prompt`, { method: 'PUT', body: JSON.stringify({ prompt }) })
 }
@@ -318,6 +324,19 @@ export function updateSettings(payload: { botName?: string; telegramContact?: st
   return request('/client/settings', {
     method: 'PUT',
     body: JSON.stringify(payload),
+  })
+}
+
+// ─── Playground (тест бота) ─────────────────────────────────────────────────
+
+export function playgroundReply(body: {
+  messages: { role: 'user' | 'assistant'; content: string }[]
+  propertyId?: string
+  phase?: string
+}) {
+  return request<{ reply: string }>('/client/playground/reply', {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
 }
 
