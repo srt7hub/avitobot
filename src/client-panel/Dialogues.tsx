@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
-  fetchDialogues, fetchDialogue,
+  fetchDialogues, fetchDialogue, setDialogueBot,
   DialogueSummary, DialogueFull,
 } from '../api'
 
@@ -32,7 +32,30 @@ function MessageBubble({ role, content, processedAt }: { role: string; content: 
   )
 }
 
-function DialogueView({ dialogue, onBack }: { dialogue: DialogueFull; onBack: () => void }) {
+function DialogueView({
+  dialogue, onBack, onBotToggle,
+}: {
+  dialogue: DialogueFull
+  onBack: () => void
+  onBotToggle: (disabled: boolean) => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function toggleBot() {
+    setSaving(true)
+    setError('')
+    const next = !dialogue.botDisabled
+    try {
+      await setDialogueBot(dialogue.id, next)
+      onBotToggle(next)
+    } catch {
+      setError('Не удалось изменить статус бота')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -50,6 +73,35 @@ function DialogueView({ dialogue, onBack }: { dialogue: DialogueFull; onBack: ()
             {dialogue.isHumanTakeover && ' · ⚠ передан оператору'}
           </p>
         </div>
+      </div>
+
+      <div className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        <div>
+          <p className="text-sm font-medium text-gray-800">
+            {dialogue.botDisabled ? 'Бот отключён в этом чате' : 'Бот отвечает в этом чате'}
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {dialogue.botDisabled
+              ? 'Гостю отвечаете только вы — автоответы не отправляются'
+              : 'Отключите, чтобы вести переписку вручную'}
+          </p>
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+        </div>
+        <button
+          onClick={toggleBot}
+          disabled={saving}
+          role="switch"
+          aria-checked={!dialogue.botDisabled}
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+            dialogue.botDisabled ? 'bg-gray-300' : 'bg-gray-900'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              dialogue.botDisabled ? 'translate-x-1' : 'translate-x-6'
+            }`}
+          />
+        </button>
       </div>
 
       <div className="bg-gray-50 rounded-xl p-4 space-y-3 min-h-40">
@@ -108,7 +160,16 @@ export default function Dialogues() {
   }
 
   if (selected) {
-    return <DialogueView dialogue={selected} onBack={() => setSelected(null)} />
+    return (
+      <DialogueView
+        dialogue={selected}
+        onBack={() => setSelected(null)}
+        onBotToggle={(disabled) => {
+          setSelected({ ...selected, botDisabled: disabled })
+          setDialogues(ds => ds.map(d => (d.id === selected.id ? { ...d, botDisabled: disabled } : d)))
+        }}
+      />
+    )
   }
 
   return (
@@ -142,6 +203,9 @@ export default function Dialogues() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-gray-800 truncate">{d.guestName}</p>
+                      {d.botDisabled && (
+                        <span className="text-xs bg-gray-200 text-gray-600 rounded-full px-2 py-0.5 flex-shrink-0">бот выкл.</span>
+                      )}
                       {d.isHumanTakeover && (
                         <span className="text-xs bg-orange-100 text-orange-600 rounded-full px-2 py-0.5 flex-shrink-0">оператор</span>
                       )}

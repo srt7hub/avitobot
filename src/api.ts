@@ -376,6 +376,7 @@ export interface DialogueSummary {
   messageCount: number
   lastMessageAt: string | null
   isHumanTakeover: boolean
+  botDisabled: boolean
   lastMessage: { role: string; content: string } | null
   updatedAt: string
 }
@@ -395,6 +396,7 @@ export interface DialogueFull {
   messageCount: number
   lastMessageAt: string | null
   isHumanTakeover: boolean
+  botDisabled: boolean
   createdAt: string
   messages: DialogueMessage[]
 }
@@ -412,4 +414,11 @@ export function fetchDialogues(page = 1) {
 
 export function fetchDialogue(id: string) {
   return request<DialogueFull>(`/client/dialogues/${id}`)
+}
+
+export function setDialogueBot(id: string, disabled: boolean) {
+  return request<{ botDisabled: boolean }>(`/client/dialogues/${id}/bot`, {
+    method: 'PATCH',
+    body: JSON.stringify({ disabled }),
+  })
 }

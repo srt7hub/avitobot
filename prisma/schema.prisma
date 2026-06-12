@@ -197,6 +197,9 @@ model Dialogue {
   messageCount  Int       @default(0)
   lastMessageAt DateTime?
   pausedUntil   DateTime?
+  // Полное отключение бота для этого чата клиентом (в отличие от pausedUntil —
+  // временной авто-паузы на 30 мин). Пока true — бот не отвечает вообще.
+  botDisabled   Boolean   @default(false)
   greetingSent  Boolean   @default(false)
   summary       String    @default("")
   createdAt     DateTime  @default(now())

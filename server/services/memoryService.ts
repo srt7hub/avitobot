@@ -53,12 +53,25 @@ export async function markMessageProcessed(
   }
 }
 
+/**
+ * Бот «молчит» в чате, если он полностью отключён клиентом (botDisabled)
+ * ИЛИ активна временная авто-пауза (pausedUntil в будущем).
+ */
 export async function isPaused(avitoChatId: string, tenantId: string): Promise<boolean> {
   const dialogue = await prisma.dialogue.findUnique({
     where: { tenantId_avitoChatId: { tenantId, avitoChatId } },
   })
-  if (!dialogue?.pausedUntil) return false
+  if (!dialogue) return false
+  if (dialogue.botDisabled) return true
+  if (!dialogue.pausedUntil) return false
   return dialogue.pausedUntil > new Date()
+}
+
+export async function setBotDisabled(dialogueId: string, tenantId: string, disabled: boolean): Promise<void> {
+  await prisma.dialogue.update({
+    where: { id: dialogueId, tenantId },
+    data: { botDisabled: disabled },
+  })
 }
 
 export async function pauseDialogue(avitoChatId: string, tenantId: string, minutes: number): Promise<void> {

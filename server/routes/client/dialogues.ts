@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import prisma from '../../prisma.js'
+import { setBotDisabled } from '../../services/memoryService.js'
 
 const router = Router()
 
@@ -37,6 +38,7 @@ router.get('/dialogues', async (req, res) => {
         messageCount: d.messageCount,
         lastMessageAt: d.lastMessageAt,
         isHumanTakeover: d.pausedUntil !== null,
+        botDisabled: d.botDisabled,
         lastMessage: d.messages[0]
           ? { role: d.messages[0].role, content: d.messages[0].content }
           : null,
@@ -77,6 +79,7 @@ router.get('/dialogues/:id', async (req, res) => {
       messageCount: d.messageCount,
       lastMessageAt: d.lastMessageAt,
       isHumanTakeover: d.pausedUntil !== null,
+      botDisabled: d.botDisabled,
       createdAt: d.createdAt,
       messages: d.messages.map((m: any) => ({
         id: m.id,
@@ -87,6 +90,32 @@ router.get('/dialogues/:id', async (req, res) => {
     })
   } catch (err) {
     console.error('[dialogues/:id] error:', err)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Полное включение/отключение бота в конкретном чате.
+router.patch('/dialogues/:id/bot', async (req, res) => {
+  const tenantId = req.auth!.tenantId!
+  const { id } = req.params
+  const { disabled } = req.body ?? {}
+
+  if (typeof disabled !== 'boolean') {
+    res.status(400).json({ error: 'disabled must be a boolean' })
+    return
+  }
+
+  try {
+    const d = await prisma.dialogue.findUnique({ where: { id }, select: { tenantId: true } })
+    if (!d || d.tenantId !== tenantId) {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+
+    await setBotDisabled(id, tenantId, disabled)
+    res.json({ botDisabled: disabled })
+  } catch (err) {
+    console.error('[dialogues/:id/bot] error:', err)
     res.status(500).json({ error: 'Internal server error' })
   }
 })
