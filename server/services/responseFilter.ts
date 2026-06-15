@@ -74,5 +74,13 @@ export function sanitizeAiResponse(text: string): SanitizeResult {
     return { text: 'Уточню вопрос и вернусь с ответом', warnings, promptLeaked: true }
   }
 
-  return { text: result.trim(), warnings }
+  result = result.trim()
+
+  // Убираем финальную точку — в мессенджере живее без неё. Только одиночную
+  // точку: многоточие (...), «?» и «!» оставляем. Внутренние точки не трогаем.
+  if (result.endsWith('.') && !result.endsWith('..')) {
+    result = result.slice(0, -1)
+  }
+
+  return { text: result, warnings }
 }
