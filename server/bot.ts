@@ -15,7 +15,7 @@ import {
 import { getFaqForProperty } from './services/faqService.js'
 import { findBookingForChat } from './services/bookingService.js'
 import { isAiSilentPhase } from './utils/guestPhase.js'
-import { sendHumanTakeoverAlert, sendDialogueNotification, sendUnknownAnswerAlert, sendOpsAlert } from './services/telegramService.js'
+import { sendHumanTakeoverAlert, sendDialogueNotification, sendUnknownAnswerAlert, sendOpsAlert, sendPausedMessageNotification } from './services/telegramService.js'
 import { maskPii } from './services/piiService.js'
 import { isPaymentStatusIntent, isSmsIntent, isAckIntent } from './constants/intents.js'
 import type { AvitoChat, AvitoMessage } from './services/avitoService.js'
@@ -235,6 +235,12 @@ async function processMessage(
   // и выходим. Ответ сформируется на последнее сообщение с учётом этого контекста.
   if (recordOnly) {
     await markAsRead(avitoConfig, avitoChatId)
+    // Если чат на паузе — менеджер должен видеть КАЖДОЕ сообщение гостя, в т.ч.
+    // промежуточные из пачки (иначе они потеряются: ответа-то всё равно нет).
+    if (tenant.telegramBotToken && tenant.telegramChatId && await isPaused(avitoChatId, tenantId)) {
+      const pausedGuestName = chat.users?.find(u => u.id !== Number(config.avitoUserId))?.name ?? 'Гость'
+      await sendPausedMessageNotification(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, pausedGuestName, maskedText)
+    }
     return
   }
 
@@ -280,6 +286,11 @@ async function processMessage(
   if (await isPaused(avitoChatId, tenantId)) {
     // Помечаем прочитанным, чтобы пауза не держала чат в unread бесконечно
     await markAsRead(avitoConfig, avitoChatId)
+    // Бот молчит, но менеджер должен видеть, что пишет гость — дублируем в Telegram.
+    if (tenant.telegramBotToken && tenant.telegramChatId) {
+      const pausedGuestName = chat.users?.find(u => u.id !== Number(config.avitoUserId))?.name ?? 'Гость'
+      await sendPausedMessageNotification(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, pausedGuestName, maskedText)
+    }
     return
   }
 

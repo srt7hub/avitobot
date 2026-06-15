@@ -60,6 +60,29 @@ export async function sendDialogueNotification(
   await postMessage(botToken, chatId, text)
 }
 
+// Гость написал, пока чат на паузе (бот молчит — ждёт оператора). Дублируем
+// сообщение менеджеру, чтобы он видел переписку и мог ответить сам.
+export async function sendPausedMessageNotification(
+  botToken: string,
+  chatId: string,
+  avitoChatId: string,
+  guestName: string,
+  guestMessage: string
+): Promise<void> {
+  if (!botToken || !chatId) return
+
+  const text = [
+    `⏸️ <b>Бот на паузе — нужен ответ менеджера</b>`,
+    ``,
+    `Гость: <b>${guestName}</b>`,
+    `${guestMessage.slice(0, 300)}`,
+    ``,
+    `<a href="https://www.avito.ru/profile/messenger/channel/${avitoChatId}">Открыть диалог</a>`,
+  ].join('\n')
+
+  await postMessage(botToken, chatId, text)
+}
+
 export async function sendUnknownAnswerAlert(
   botToken: string,
   chatId: string,
