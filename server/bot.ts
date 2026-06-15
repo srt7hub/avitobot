@@ -56,6 +56,14 @@ function isSystemMessage(message: AvitoMessage): boolean {
   return message.type === 'system' || String(message.author_id) === '0'
 }
 
+// Сообщения, которые НЕЛЬЗЯ проглатывать при схлопывании пачки: системные
+// (новая бронь — критичный момент) и явный запрос оператора. Их обрабатываем
+// полноценно, даже если они не последние в пачке.
+function needsImmediateHandling(message: AvitoMessage): boolean {
+  if (isSystemMessage(message)) return true
+  return isOperatorRequest(message.content?.text ?? '')
+}
+
 function isNewBookingMessage(text: string): boolean {
   const lower = text.toLowerCase()
   return BOOKING_KEYWORDS.some(kw => lower.includes(kw))
@@ -108,7 +116,10 @@ async function sendProgrammaticReply(
 async function processMessage(
   config: PrismaTenantAvitoConfig & { tenant: Tenant },
   chat: AvitoChat,
-  message: AvitoMessage
+  message: AvitoMessage,
+  // recordOnly: только зафиксировать сообщение в истории (без ответа). Нужно при
+  // схлопывании пачки сообщений гостя — отвечаем один раз на последнее.
+  recordOnly = false
 ): Promise<void> {
   const { tenantId, tenant } = config
   const avitoChatId = chat.id
@@ -217,6 +228,14 @@ async function processMessage(
     tokenExpiresAt: config.tokenExpiresAt,
     pollingEnabled: config.pollingEnabled,
     pollingStartedAt: config.pollingStartedAt,
+  }
+
+  // Схлопывание пачки: это не последнее сообщение гостя в тике — уже записали
+  // его в историю выше (markMessageProcessed), теперь просто помечаем прочитанным
+  // и выходим. Ответ сформируется на последнее сообщение с учётом этого контекста.
+  if (recordOnly) {
+    await markAsRead(avitoConfig, avitoChatId)
+    return
   }
 
   // Предохранитель: НЕ отвечаем на сообщения, пришедшие до момента запуска
@@ -370,9 +389,16 @@ async function processMessage(
     create: { tenantId, messagesDay: 1, messagesWeek: 1, messagesMonth: 1, isRunning: true },
   })
 
+  // Бот не знает ответа («Уточню и вернусь») — ставим паузу на 30 мин, чтобы
+  // менеджер успел ответить сам и бот не отвечал «Уточню и вернусь» снова.
+  // Пауза не зависит от настройки Telegram.
+  const isUnknown = filteredReply.includes('Уточню и вернусь с ответом')
+  if (isUnknown) {
+    await pauseDialogue(avitoChatId, tenantId, PAUSE_MINUTES)
+  }
+
   // Telegram notifications
   if (tenant.telegramBotToken && tenant.telegramChatId) {
-    const isUnknown = filteredReply.includes('Уточню и вернусь с ответом')
     if (isUnknown) {
       await sendUnknownAnswerAlert(tenant.telegramBotToken, tenant.telegramChatId, avitoChatId, guestName, maskedText, filteredReply)
     } else {
@@ -442,8 +468,19 @@ async function processTenant(config: PrismaTenantAvitoConfig & { tenant: Tenant 
         const messages = await getMessages(avitoConfig, chat.id)
         const unread = messages.filter(m => !m.isRead && m.author_id !== Number(config.avitoUserId))
 
-        for (const message of unread) {
-          await processMessage(config, chat, message)
+        // Схлопываем пачку: если гость прислал несколько сообщений подряд (бот
+        // увидел их за один тик), отвечаем ОДИН раз — на последнее, с учётом
+        // предыдущих в истории. Иначе бот дублирует ответ на каждое сообщение.
+        // Системные сообщения (новая бронь) и запросы оператора при этом не
+        // должны проглатываться, поэтому их обрабатываем полноценно всегда.
+        for (let i = 0; i < unread.length; i++) {
+          const message = unread[i]
+          const isLast = i === unread.length - 1
+          // Не-последние обычные сообщения только фиксируем в истории (recordOnly),
+          // не отвечаем. Системные/оператор — обрабатываем полноценно (внутри они
+          // сами решают, как реагировать).
+          const recordOnly = !isLast && !needsImmediateHandling(message)
+          await processMessage(config, chat, message, recordOnly)
         }
       } catch (err) {
         // 402/429 — фатально для всего тенанта: пробрасываем наружу.
