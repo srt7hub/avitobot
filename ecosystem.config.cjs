@@ -1,3 +1,10 @@
+// Код не загружает dotenv сам — читаем .env здесь и прокидываем в env
+// каждого процесса, чтобы DATABASE_URL/JWT_SECRET были доступны после
+// рестартов PM2 и pm2 resurrect (иначе Prisma коннектится в никуда).
+const fileEnv = require('dotenv').config({
+  path: require('path').join(__dirname, '.env')
+}).parsed || {}
+
 module.exports = {
   apps: [
     {
@@ -14,6 +21,7 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
       env: {
+        ...fileEnv,
         NODE_ENV: 'production',
         API_PORT: '3010'
       }
@@ -32,6 +40,7 @@ module.exports = {
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
       env: {
+        ...fileEnv,
         NODE_ENV: 'production'
       }
     }
